@@ -1,0 +1,1 @@
+{"root":["./src/app.tsx","./src/main.tsx","./src/vite-env.d.ts","./src/components/lessonlist.tsx","./src/components/studentauth.tsx","./src/components/teacherlms.tsx","./src/components/webplayer.tsx","./src/lib/supabase.ts","./src/types/index.ts"],"version":"5.7.3"}

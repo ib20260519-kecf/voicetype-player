@@ -10,6 +10,14 @@ interface WebPlayerProps {
 
 type StudyMode = 'video' | 'dictation' | 'cloze' | 'shadowing' | 'slides' | 'vocab' | 'idioms' | 'ib_inquiry';
 
+interface AIFeedbackResult {
+  rubric: string;
+  strengths_ko: string;
+  feedback_ko: string;
+  polished_en: string;
+  advanced_model_en: string;
+}
+
 export const WebPlayer: React.FC<WebPlayerProps> = ({ lesson, student, onBack }) => {
   const audioRef = useRef<HTMLAudioElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -76,7 +84,7 @@ export const WebPlayer: React.FC<WebPlayerProps> = ({ lesson, student, onBack })
     }
   ];
 
-  // 6. IB Inquiry Questions State
+  // 6. IB Inquiry Questions & Gemini AI State
   const defaultIBQuestions: IBQuestion[] = [
     {
       type: 'factual',
@@ -107,6 +115,13 @@ export const WebPlayer: React.FC<WebPlayerProps> = ({ lesson, student, onBack })
 
   const [ibAnswers, setIbAnswers] = useState<Record<number, string>>({});
   const [showSampleAnswer, setShowSampleAnswer] = useState<Record<number, boolean>>({});
+
+  // Gemini API Key & Live Feedback State
+  const [geminiApiKey, setGeminiApiKey] = useState<string>(localStorage.getItem('vt_gemini_api_key') || '');
+  const [showApiKeyModal, setShowApiKeyModal] = useState<boolean>(false);
+  const [tempApiKey, setTempApiKey] = useState<string>(localStorage.getItem('vt_gemini_api_key') || '');
+  const [aiFeedbacks, setAiFeedbacks] = useState<Record<number, AIFeedbackResult>>({});
+  const [isGeneratingAI, setIsGeneratingAI] = useState<Record<number, boolean>>({});
 
   // Submission State
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
@@ -246,6 +261,90 @@ export const WebPlayer: React.FC<WebPlayerProps> = ({ lesson, student, onBack })
     }
   };
 
+  // Gemini AI Feedback Request
+  const handleRequestAIFeedback = async (qIdx: number) => {
+    const studentAnswer = (ibAnswers[qIdx] || '').trim();
+    if (!studentAnswer) {
+      alert('먼저 질문에 대한 당신의 생각/답변을 작성해 주세요!');
+      return;
+    }
+
+    if (!geminiApiKey) {
+      setShowApiKeyModal(true);
+      return;
+    }
+
+    const question = ibQuestions[qIdx];
+    setIsGeneratingAI(prev => ({ ...prev, [qIdx]: true }));
+
+    try {
+      const prompt = `
+You are an inspiring, expert IB English & Critical Thinking Inquiry Coach.
+Analyze the following student's response to an IB inquiry question based on the learning material.
+
+[Lesson Title]: "${lesson.title}"
+[Question Type]: IB ${question.type.toUpperCase()} Question
+[English Question]: "${question.question_en}"
+[Korean Question]: "${question.question_ko}"
+[Student Answer]: "${studentAnswer}"
+
+Please analyze and provide feedback in JSON format ONLY:
+{
+  "rubric": "IB Criterion evaluation grade (e.g., 'Criterion A: Excellent (Level 7/8)' or 'Criterion B: Good (Level 5/6)')",
+  "strengths_ko": "학생의 논리와 생각에서 칭찬할 점 (친절하고 격려하는 한국어 1~2문장)",
+  "feedback_ko": "더 깊은 IB 탐구를 위해 보완할 점과 심층 조언 (한국어 2문장)",
+  "polished_en": "원어민 수준으로 자연스럽고 명확하게 교정된 세련된 영어 문장",
+  "advanced_model_en": "학생의 생각을 한 단계 더 심화시킨 고득점 IB 모범 에세이 답변 (영어 2~3문장)"
+}
+`;
+
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: {
+              response_mime_type: 'application/json',
+              temperature: 0.7
+            }
+          })
+        }
+      );
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error?.message || `HTTP ${response.status} 오류`);
+      }
+
+      const data = await response.json();
+      const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+      const parsed: AIFeedbackResult = JSON.parse(rawText);
+
+      setAiFeedbacks(prev => ({ ...prev, [qIdx]: parsed }));
+    } catch (err: any) {
+      alert('Gemini AI 분석 중 오류: ' + (err.message || err));
+      if (err.message?.includes('API_KEY')) {
+        setShowApiKeyModal(true);
+      }
+    } finally {
+      setIsGeneratingAI(prev => ({ ...prev, [qIdx]: false }));
+    }
+  };
+
+  const handleSaveApiKey = () => {
+    const key = tempApiKey.trim();
+    if (!key) {
+      alert('API Key를 입력해 주세요.');
+      return;
+    }
+    localStorage.setItem('vt_gemini_api_key', key);
+    setGeminiApiKey(key);
+    setShowApiKeyModal(false);
+    alert('✨ Gemini API Key가 안전하게 저장되었습니다!');
+  };
+
   const handleFinalSubmit = async () => {
     setIsSubmitting(true);
     const totalSegments = segments.length;
@@ -292,7 +391,7 @@ export const WebPlayer: React.FC<WebPlayerProps> = ({ lesson, student, onBack })
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-between">
-      {/* Audio element for non-video playback */}
+      {/* Audio element */}
       <audio ref={audioRef} src={lesson.audio_url} preload="auto" />
 
       {/* Top Header & Multi-Mode Navigation */}
@@ -310,13 +409,22 @@ export const WebPlayer: React.FC<WebPlayerProps> = ({ lesson, student, onBack })
             <p className="text-[11px] text-indigo-400 font-bold">{student.name} 학생 학습 중</p>
           </div>
 
-          <button
-            onClick={handleFinalSubmit}
-            disabled={isSubmitting}
-            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black shadow-md cursor-pointer"
-          >
-            {isSubmitting ? '제출 중...' : '과제 제출 ✓'}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowApiKeyModal(true)}
+              className="px-3 py-2 bg-purple-950/80 hover:bg-purple-900 text-purple-300 border border-purple-800/80 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1"
+              title="Google AI Studio API Key 설정"
+            >
+              🔑 {geminiApiKey ? 'Gemini 연동됨' : 'Gemini Key 등록'}
+            </button>
+            <button
+              onClick={handleFinalSubmit}
+              disabled={isSubmitting}
+              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black shadow-md cursor-pointer"
+            >
+              {isSubmitting ? '제출 중...' : '과제 제출 ✓'}
+            </button>
+          </div>
         </div>
 
         {/* 8 Study Mode Tabs */}
@@ -350,25 +458,28 @@ export const WebPlayer: React.FC<WebPlayerProps> = ({ lesson, student, onBack })
       <main className="max-w-4xl w-full mx-auto p-4 sm:p-6 flex-1 flex flex-col justify-center space-y-6">
 
         {/* ─────────────────────────────────────────────────────────────
-            MODE: IB Inquiry Questions (IB 3단계 심층 탐구 질문)
+            MODE: IB Inquiry Questions & Live Gemini AI Feedback
         ────────────────────────────────────────────────────────────── */}
         {currentMode === 'ib_inquiry' && (
           <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b border-slate-800 pb-4">
               <div>
                 <h3 className="text-lg font-black text-white flex items-center gap-2">
-                  <span>🧠</span> IB Inquiry & Critical Thinking (IB 심층 탐구 서술)
+                  <span>🧠</span> IB Inquiry & Gemini AI 첨삭관
                 </h3>
                 <p className="text-xs text-slate-400 mt-1">
-                  사실 확인(Factual)부터 개념 이해(Conceptual), 비판적 토론(Debatable)까지 자신의 생각을 영어로 작성해 보세요.
+                  생각을 영어로 작성하고 <strong>[✨ Gemini AI 첨삭]</strong>을 누르면 실시간 IB 루브릭 평가와 세련된 영어 교정을 즉시 제공합니다.
                 </p>
               </div>
-              <span className="px-3 py-1 bg-purple-950 text-purple-300 border border-purple-800 rounded-full text-xs font-black">
-                IB 3단계 탐구
-              </span>
+              <button
+                onClick={() => setShowApiKeyModal(true)}
+                className="text-xs text-purple-400 hover:text-purple-300 font-bold underline cursor-pointer"
+              >
+                {geminiApiKey ? '✨ AI 연동 상태: 정상' : '🔑 Gemini Key 입력하기'}
+              </button>
             </div>
 
-            <div className="space-y-6">
+            <div className="space-y-8">
               {ibQuestions.map((q, idx) => {
                 const typeBadge = {
                   factual: { label: '📌 1단계: Factual (사실적 질문)', color: 'bg-blue-950 text-blue-300 border-blue-800' },
@@ -376,10 +487,13 @@ export const WebPlayer: React.FC<WebPlayerProps> = ({ lesson, student, onBack })
                   debatable: { label: '⚖️ 3단계: Debatable (심층 토론 질문)', color: 'bg-pink-950 text-pink-300 border-pink-800' }
                 }[q.type];
 
+                const feedback = aiFeedbacks[idx];
+                const isLoadingAI = isGeneratingAI[idx];
+
                 return (
-                  <div key={idx} className="bg-slate-950 border border-slate-800 rounded-2xl p-5 space-y-4">
+                  <div key={idx} className="bg-slate-950 border border-slate-800 rounded-3xl p-5 sm:p-6 space-y-4 shadow-xl">
                     <div className="flex items-center justify-between">
-                      <span className={`px-2.5 py-1 rounded-lg text-xs font-black border ${typeBadge.color}`}>
+                      <span className={`px-3 py-1 rounded-xl text-xs font-black border ${typeBadge.color}`}>
                         {typeBadge.label}
                       </span>
                     </div>
@@ -399,35 +513,85 @@ export const WebPlayer: React.FC<WebPlayerProps> = ({ lesson, student, onBack })
                     </div>
 
                     {/* Student Essay / Answer Input */}
-                    <div className="space-y-2">
+                    <div className="space-y-3">
                       <textarea
                         rows={3}
                         placeholder="이 질문에 대한 당신의 생각과 답변을 영어(또는 한국어)로 서술하세요..."
                         value={ibAnswers[idx] || ''}
                         onChange={e => setIbAnswers(prev => ({ ...prev, [idx]: e.target.value }))}
-                        className="w-full bg-slate-900 border border-slate-700 focus:border-indigo-500 rounded-xl p-3.5 text-xs sm:text-sm text-white font-medium outline-none leading-relaxed placeholder:text-slate-600"
+                        className="w-full bg-slate-900 border border-slate-700 focus:border-purple-500 rounded-2xl p-4 text-xs sm:text-sm text-white font-medium outline-none leading-relaxed placeholder:text-slate-600 transition-colors"
                       />
 
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-slate-500 text-[11px]">
-                          작성된 답변은 과제 제출 시 선생님께 자동 전달됩니다.
-                        </span>
+                      {/* Action Buttons */}
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleRequestAIFeedback(idx)}
+                          disabled={isLoadingAI}
+                          className="px-4 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-xl text-xs font-black shadow-lg shadow-purple-600/30 transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                        >
+                          {isLoadingAI ? '🤖 Gemini AI가 심층 분석 중...' : '✨ Gemini AI 실시간 첨삭 & 피드백 받기'}
+                        </button>
+
                         {q.sample_answer_en && (
                           <button
                             type="button"
                             onClick={() => setShowSampleAnswer(prev => ({ ...prev, [idx]: !prev[idx] }))}
-                            className="text-purple-400 hover:text-purple-300 font-bold cursor-pointer"
+                            className="text-xs text-slate-400 hover:text-purple-300 font-bold cursor-pointer"
                           >
-                            {showSampleAnswer[idx] ? '🙈 모범 가이드 가리기' : '🤖 AI 모범 생각 가이드'}
+                            {showSampleAnswer[idx] ? '🙈 기본 가이드 가리기' : '📖 교사 기본 예시 답안'}
                           </button>
                         )}
                       </div>
 
-                      {/* Sample Answer Box */}
+                      {/* Default Sample Answer Box */}
                       {showSampleAnswer[idx] && q.sample_answer_en && (
-                        <div className="p-3.5 bg-purple-950/40 border border-purple-900/60 rounded-xl text-xs text-purple-200 space-y-1 animate-in fade-in">
-                          <p className="font-bold text-purple-300">✨ 모범 서술 가이드 (Sample Answer):</p>
+                        <div className="p-3.5 bg-slate-900 border border-slate-800 rounded-xl text-xs text-slate-300 space-y-1 animate-in fade-in">
+                          <p className="font-bold text-slate-400">📖 교사 기본 예시 답안 (Reference):</p>
                           <p className="italic">"{q.sample_answer_en}"</p>
+                        </div>
+                      )}
+
+                      {/* 🌟 GEMINI AI LIVE FEEDBACK CARD */}
+                      {feedback && (
+                        <div className="bg-gradient-to-br from-purple-950/60 via-slate-900 to-indigo-950/60 border-2 border-purple-500/50 rounded-2xl p-5 space-y-4 shadow-2xl animate-in fade-in zoom-in-95">
+                          <div className="flex items-center justify-between border-b border-purple-800/60 pb-3">
+                            <span className="text-xs font-black text-purple-300 flex items-center gap-1.5">
+                              <span>✨</span> Gemini AI 실시간 첨삭 리포트
+                            </span>
+                            <span className="px-2.5 py-0.5 bg-purple-500/20 text-purple-200 border border-purple-500/40 rounded-full text-[11px] font-black">
+                              {feedback.rubric}
+                            </span>
+                          </div>
+
+                          {/* Strengths & Feedback */}
+                          <div className="space-y-2 text-xs">
+                            <div className="p-3 bg-slate-950/80 rounded-xl border border-slate-800 space-y-1">
+                              <p className="font-black text-emerald-400">👏 훌륭한 점 (Strengths):</p>
+                              <p className="text-slate-200">{feedback.strengths_ko}</p>
+                            </div>
+
+                            <div className="p-3 bg-slate-950/80 rounded-xl border border-slate-800 space-y-1">
+                              <p className="font-black text-indigo-400">💡 심층 탐구 조언 (Inquiry Feedback):</p>
+                              <p className="text-slate-200">{feedback.feedback_ko}</p>
+                            </div>
+                          </div>
+
+                          {/* Polished English */}
+                          <div className="p-3.5 bg-purple-950/40 border border-purple-800/80 rounded-xl space-y-1">
+                            <p className="text-[11px] font-black text-purple-300">✍️ 원어민 표현 교정 (Polished Expression):</p>
+                            <p className="text-xs sm:text-sm font-bold text-white leading-relaxed">
+                              "{feedback.polished_en}"
+                            </p>
+                          </div>
+
+                          {/* Advanced Model Essay */}
+                          <div className="p-3.5 bg-indigo-950/40 border border-indigo-800/80 rounded-xl space-y-1">
+                            <p className="text-[11px] font-black text-indigo-300">🏆 발전된 심층 모범 서술 (Advanced Model Answer):</p>
+                            <p className="text-xs sm:text-sm font-medium text-slate-200 leading-relaxed italic">
+                              "{feedback.advanced_model_en}"
+                            </p>
+                          </div>
                         </div>
                       )}
                     </div>
@@ -875,6 +1039,60 @@ export const WebPlayer: React.FC<WebPlayerProps> = ({ lesson, student, onBack })
           </div>
         </div>
       </footer>
+
+      {/* Gemini API Key Setting Modal */}
+      {showApiKeyModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-4" onClick={() => setShowApiKeyModal(false)}>
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 w-full max-w-md space-y-4 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h3 className="text-base font-black text-white flex items-center gap-2">
+                <span>🔑</span> Google Gemini API Key 설정
+              </h3>
+              <button onClick={() => setShowApiKeyModal(false)} className="text-slate-400 hover:text-white text-xl">✕</button>
+            </div>
+
+            <p className="text-xs text-slate-400 leading-relaxed">
+              Google AI Studio에서 무료로 발급받은 <strong>Gemini API Key</strong>를 입력하시면, 실시간 AI 첨삭 및 IB 평가 기능을 무제한으로 사용할 수 있습니다.
+            </p>
+
+            <div className="space-y-2">
+              <input
+                type="password"
+                placeholder="AIzaSy..."
+                value={tempApiKey}
+                onChange={e => setTempApiKey(e.target.value)}
+                className="w-full px-4 py-3 bg-slate-950 border border-slate-700 focus:border-purple-500 rounded-2xl text-xs font-mono text-white outline-none"
+              />
+              <div className="flex justify-between items-center text-[11px]">
+                <a
+                  href="https://aistudio.google.com/app/apikey"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-purple-400 hover:underline font-bold"
+                >
+                  👉 무료 Gemini API Key 발급받기 (클릭)
+                </a>
+                <span className="text-slate-500">브라우저 로컬 저장</span>
+              </div>
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <button
+                onClick={handleSaveApiKey}
+                className="flex-1 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-xl text-xs font-black cursor-pointer shadow-lg shadow-purple-600/30"
+              >
+                저장 및 AI 활성화 ✓
+              </button>
+              <button
+                onClick={() => setShowApiKeyModal(false)}
+                className="px-4 py-3 bg-slate-800 text-slate-400 rounded-xl text-xs font-bold hover:bg-slate-700 cursor-pointer"
+              >
+                닫기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Result Modal */}
       {showResultModal && (

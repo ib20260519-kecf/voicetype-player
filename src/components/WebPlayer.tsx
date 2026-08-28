@@ -1704,10 +1704,18 @@ Please analyze and generate response in STRICT JSON format:
                 )}
               </div>
 
-              {/* 🌐 External Dictionaries Quick Links */}
+              {/* 🌐 External Dictionaries & Google Images Quick Links */}
               <div className="pt-2 flex flex-wrap items-center justify-between gap-2 text-xs border-t border-slate-800">
-                <span className="text-slate-400 font-bold text-[11px]">외부 공인 사전 바로가기:</span>
-                <div className="flex gap-2">
+                <span className="text-slate-400 font-bold text-[11px]">외부 공인 사전 & 이미지 바로가기:</span>
+                <div className="flex flex-wrap gap-2">
+                  <a
+                    href={`https://www.google.com/search?tbm=isch&q=${encodeURIComponent(selectedWordDetail.word)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-3 py-1.5 bg-rose-950 text-rose-300 border border-rose-800 rounded-xl font-bold hover:bg-rose-900 transition-all text-[11px] flex items-center gap-1"
+                  >
+                    🖼️ 구글 이미지 검색 ↗
+                  </a>
                   <a
                     href={`https://en.dict.naver.com/#/search?query=${encodeURIComponent(selectedWordDetail.word)}`}
                     target="_blank"
@@ -1726,6 +1734,7 @@ Please analyze and generate response in STRICT JSON format:
                   </a>
                 </div>
               </div>
+
             </div>
 
             {/* Footer Close */}

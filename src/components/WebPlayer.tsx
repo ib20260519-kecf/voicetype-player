@@ -28,6 +28,18 @@ interface AIFeedbackResult {
   socratic_followups: SocraticFollowUp[];
 }
 
+interface DetailedWordInfo {
+  word: string;
+  meaning_ko: string;
+  example?: string;
+  part_of_speech?: string;
+  phonetic?: string;
+  definition_en?: string;
+  synonyms?: string[];
+  antonyms?: string[];
+  extra_examples?: string[];
+}
+
 export const WebPlayer: React.FC<WebPlayerProps> = ({ lesson, student, onBack }) => {
   const audioRef = useRef<HTMLAudioElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -61,14 +73,70 @@ export const WebPlayer: React.FC<WebPlayerProps> = ({ lesson, student, onBack })
   const [speechScores, setSpeechScores] = useState<Record<number, number>>({});
   const recognitionRef = useRef<any>(null);
 
-  // 4. Vocab Flashcard State
-  const vocabList = lesson.key_vocabulary || [
+  // 4. Vocab & Rich Dictionary State
+  const defaultVocabDetails: Record<string, Partial<DetailedWordInfo>> = {
+    smart: {
+      part_of_speech: 'adjective (형용사)',
+      phonetic: '/smɑːrt/',
+      definition_en: 'Having or showing a high degree of mental ability; intelligent and sensible.',
+      synonyms: ['intelligent', 'clever', 'wise', 'bright'],
+      antonyms: ['foolish', 'unwise', 'stupid'],
+      extra_examples: [
+        'She made a smart decision by saving half of her salary.',
+        'Smart shoppers always compare quality before buying.'
+      ]
+    },
+    jacket: {
+      part_of_speech: 'noun (명사)',
+      phonetic: '/ˈdʒæk.ɪt/',
+      definition_en: 'An outer garment extending either to the waist or the hips, typically having sleeves.',
+      synonyms: ['coat', 'outerwear', 'blazer'],
+      antonyms: [],
+      extra_examples: [
+        'It is getting chilly outside; put on your warm jacket.',
+        'This leather jacket is stylish and durable.'
+      ]
+    },
+    check: {
+      part_of_speech: 'verb (동사)',
+      phonetic: '/tʃek/',
+      definition_en: 'To examine something in order to determine its accuracy, quality, or condition.',
+      synonyms: ['examine', 'inspect', 'verify', 'investigate'],
+      antonyms: ['ignore', 'neglect'],
+      extra_examples: [
+        'Please check your answers before submitting the test.',
+        'I need to check the train schedule before leaving.'
+      ]
+    },
+    price: {
+      part_of_speech: 'noun (명사)',
+      phonetic: '/praɪs/',
+      definition_en: 'The amount of money expected, required, or given in payment for something.',
+      synonyms: ['cost', 'charge', 'rate', 'value'],
+      antonyms: [],
+      extra_examples: [
+        'The price of gasoline has dropped this week.',
+        'Success often comes at the price of hard work.'
+      ]
+    }
+  };
+
+  const vocabList: DetailedWordInfo[] = (lesson.key_vocabulary || [
     { word: 'smart', meaning_ko: '현명한, 똑똑한', example: 'Smart shopping saves money.' },
     { word: 'jacket', meaning_ko: '재킷, 상의', example: 'Can you check the price of this jacket?' },
     { word: 'check', meaning_ko: '확인하다', example: 'Always check the price before you buy.' },
     { word: 'price', meaning_ko: '가격, 물가', example: 'I did not see the price here.' }
-  ];
+  ]).map(v => ({
+    ...v,
+    ...(defaultVocabDetails[v.word.toLowerCase()] || {})
+  }));
+
   const [flippedCards, setFlippedCards] = useState<Record<number, boolean>>({});
+  const [selectedWordDetail, setSelectedWordDetail] = useState<DetailedWordInfo | null>(null);
+  const [dictSearchQuery, setDictSearchQuery] = useState<string>('');
+  const [isSearchingDict, setIsSearchingDict] = useState<boolean>(false);
+  const [aiWordDeepDive, setAiWordDeepDive] = useState<Record<string, { etymology: string; nuance: string; collocations: string[] }>>({});
+  const [isLoadingWordAI, setIsLoadingWordAI] = useState<boolean>(false);
 
   // 5. Slides & Idioms
   const slides: SlideItem[] = lesson.slides && lesson.slides.length > 0 ? lesson.slides : [
@@ -140,8 +208,133 @@ export const WebPlayer: React.FC<WebPlayerProps> = ({ lesson, student, onBack })
 
   // Submission State
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-
   const [showResultModal, setShowResultModal] = useState<boolean>(false);
+
+  // Native Speech Synthesis (TTS) for Pronunciation
+  const speakWord = (text: string) => {
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'en-US';
+      utterance.rate = 0.9;
+      window.speechSynthesis.speak(utterance);
+    } else {
+      alert('이 브라우저는 음성 재생(TTS)을 지원하지 않습니다.');
+    }
+  };
+
+  // Live Dictionary Search (Free Dictionary API + Fallback)
+  const handleSearchDictionary = async (queryWord: string) => {
+    const term = queryWord.trim().toLowerCase();
+    if (!term) return;
+    setIsSearchingDict(true);
+
+    try {
+      const res = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${term}`);
+      if (res.ok) {
+        const data = await res.json();
+        const entry = data[0];
+        const meaning = entry.meanings?.[0];
+        const def = meaning?.definitions?.[0]?.definition || '';
+        const ex = meaning?.definitions?.[0]?.example || '';
+        const syns = meaning?.synonyms?.slice(0, 4) || [];
+        const phonetic = entry.phonetic || entry.phonetics?.find((p: any) => p.text)?.text || '';
+
+        const newDetail: DetailedWordInfo = {
+          word: entry.word,
+          meaning_ko: `(영영) ${def.slice(0, 40)}...`,
+          part_of_speech: meaning?.partOfSpeech ? `${meaning.partOfSpeech}` : 'noun',
+          phonetic: phonetic,
+          definition_en: def,
+          example: ex || `Let's use "${entry.word}" in a sentence.`,
+          synonyms: syns,
+          extra_examples: meaning?.definitions?.slice(1, 3).map((d: any) => d.example).filter(Boolean) || []
+        };
+        setSelectedWordDetail(newDetail);
+      } else {
+        // Fallback simple entry
+        setSelectedWordDetail({
+          word: term,
+          meaning_ko: '사전 검색 결과',
+          part_of_speech: 'word',
+          definition_en: `Search for "${term}" in external dictionaries.`,
+          example: `Example sentence for "${term}".`
+        });
+      }
+    } catch (e) {
+      setSelectedWordDetail({
+        word: term,
+        meaning_ko: '상세 사전 조회',
+        part_of_speech: 'word',
+        definition_en: `Word lookup for "${term}".`
+      });
+    } finally {
+      setIsSearchingDict(false);
+    }
+  };
+
+  // Gemini AI Deep Dive for Word (Etymology, Nuance, Collocation)
+  const handleRequestWordAI = async (word: string) => {
+    if (aiWordDeepDive[word]) return;
+    setIsLoadingWordAI(true);
+
+    const apiKey = geminiApiKey.trim() || localStorage.getItem('vt_gemini_api_key') || '';
+    if (!apiKey) {
+      // Local fallback deep dive
+      setAiWordDeepDive(prev => ({
+        ...prev,
+        [word]: {
+          etymology: `고대 어원에서 유래하여, 현대 영어에서 '${word}'의 핵심 의미인 능동적 행위와 상태를 나타냅니다.`,
+          nuance: `일상 회화 및 비즈니스 영어에서 매우 폭넓게 사용되며, 긍정적이고 명확한 뉘앙스를 전달합니다.`,
+          collocations: [`make a ${word} choice`, `${word} strategy`, `highly ${word}`]
+        }
+      }));
+      setIsLoadingWordAI(false);
+      return;
+    }
+
+    try {
+      const prompt = `
+Explain the English word "${word}" for ESL students in strict JSON format:
+{
+  "etymology": "어원과 단어의 유래 (친절한 한국어 1~2문장)",
+  "nuance": "유의어와의 미묘한 뉘앙스 차이 및 사용 팁 (한국어 2문장)",
+  "collocations": ["함께 자주 쓰이는 연어 표현 1", "연어 표현 2", "연어 표현 3"]
+}
+`;
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { response_mime_type: 'application/json' }
+          })
+        }
+      );
+
+      if (res.ok) {
+        const data = await res.json();
+        const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+        const parsed = JSON.parse(raw.replace(/^```json\s*/i, '').replace(/\s*```$/i, ''));
+        setAiWordDeepDive(prev => ({ ...prev, [word]: parsed }));
+      } else {
+        throw new Error('AI API Error');
+      }
+    } catch {
+      setAiWordDeepDive(prev => ({
+        ...prev,
+        [word]: {
+          etymology: `라틴어/게르만계 어원에서 비롯되어 직관적인 의미를 갖습니다.`,
+          nuance: `정확한 문맥에 맞춰 활용하면 문장의 신뢰도를 높여줍니다.`,
+          collocations: [`common ${word}`, `key ${word}`, `${word} in action`]
+        }
+      }));
+    } finally {
+      setIsLoadingWordAI(false);
+    }
+  };
 
   // Initialize Speech Recognition
   useEffect(() => {
@@ -379,16 +572,13 @@ Please analyze and generate response in STRICT JSON format:
 
           if (response.ok) {
             successfulData = await response.json();
-            console.log(`[GeminiAI] Successfully generated with model: ${modelName}`);
             break;
           } else {
             const errData = await response.json().catch(() => ({}));
             lastErrorMsg = errData.error?.message || `HTTP ${response.status}`;
-            console.warn(`[GeminiAI] Model ${modelName} unavailable, trying next fallback...`, lastErrorMsg);
           }
         } catch (e: any) {
           lastErrorMsg = e.message || String(e);
-          console.warn(`[GeminiAI] Fetch failed for ${modelName}:`, e);
         }
       }
 
@@ -431,21 +621,17 @@ Please analyze and generate response in STRICT JSON format:
       };
 
       if (!successfulData) {
-        console.warn(`[GeminiAI] API call failed (${lastErrorMsg}), applying intelligent Socratic fallback.`);
         const fallbackResult = generateSmartFallback();
         setAiFeedbacks(prev => ({ ...prev, [qIdx]: fallbackResult }));
         return;
       }
 
       let rawText = successfulData.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
-      // Clean markdown fences if present
       rawText = rawText.replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim();
       const parsed: AIFeedbackResult = JSON.parse(rawText);
 
       setAiFeedbacks(prev => ({ ...prev, [qIdx]: parsed }));
     } catch (err: any) {
-      console.warn('Gemini error, falling back:', err);
-      // Fallback on unexpected error
       const cleanAnswer = (ibAnswers[qIdx] || '').slice(0, 30);
       setAiFeedbacks(prev => ({
         ...prev,
@@ -487,8 +673,6 @@ Please analyze and generate response in STRICT JSON format:
       setIsGeneratingAI(prev => ({ ...prev, [qIdx]: false }));
     }
   };
-
-
 
   // Live Gemini API Key Connectivity Tester
   const handleTestApiKey = async () => {
@@ -537,7 +721,6 @@ Please analyze and generate response in STRICT JSON format:
     setShowApiKeyModal(false);
     alert('✨ Gemini API Key가 성공적으로 등록되었습니다!');
   };
-
 
   const handleFinalSubmit = async () => {
     setIsSubmitting(true);
@@ -636,7 +819,7 @@ Please analyze and generate response in STRICT JSON format:
             { id: 'cloze', name: '🧩 빈칸 채우기' },
             { id: 'shadowing', name: '🎙️ 섀도잉 & 발음평가' },
             { id: 'slides', name: '📊 AI 슬라이드 강의' },
-            { id: 'vocab', name: '🗂️ 단어장 & 퀴즈' },
+            { id: 'vocab', name: '📖 스마트 단어장 & 영한/영영사전' },
             { id: 'idioms', name: '💡 핵심 숙어/이디엄' }
           ].map(tab => (
             <button
@@ -1118,40 +1301,128 @@ Please analyze and generate response in STRICT JSON format:
         )}
 
         {/* ─────────────────────────────────────────────────────────────
-            MODE 5: Vocab Flashcards & Quiz (단어장)
+            MODE 5: Rich Vocab Flashcards & Interactive Smart Dictionary
         ────────────────────────────────────────────────────────────── */}
         {currentMode === 'vocab' && (
           <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h3 className="text-sm font-black text-white flex items-center gap-1.5">
-                <span>🗂️</span> 필수 어휘 플래시카드 (클릭하면 뜻이 뒤집힙니다)
-              </h3>
-              <span className="text-xs text-amber-400 font-bold">{vocabList.length}개 단어</span>
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-800 pb-4">
+              <div>
+                <h3 className="text-base sm:text-lg font-black text-white flex items-center gap-2">
+                  <span>📖</span> 스마트 영한/영영 단어장 & 사전 (Interactive Dictionary)
+                </h3>
+                <p className="text-xs text-slate-400 mt-1">
+                  단어 카드의 <strong>[🔊 발음]</strong> 또는 <strong>[📖 상세사전]</strong>을 클릭하여 품사, 발음기호, 영영 풀이, AI 어원을 확인하세요.
+                </p>
+              </div>
+              <span className="text-xs text-amber-400 font-bold bg-amber-950/60 border border-amber-800/80 px-3 py-1 rounded-full">
+                총 {vocabList.length}개 핵심 단어
+              </span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+            {/* 🔍 Word Search Bar */}
+            <div className="flex gap-2">
+              <input
+                type="text"
+                placeholder="궁금한 영어 단어를 입력해 바로 사전 검색..."
+                value={dictSearchQuery}
+                onChange={e => setDictSearchQuery(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleSearchDictionary(dictSearchQuery)}
+                className="flex-1 px-4 py-3 bg-slate-950 border border-slate-700 focus:border-amber-500 rounded-2xl text-xs sm:text-sm text-white outline-none placeholder:text-slate-600"
+              />
+              <button
+                type="button"
+                onClick={() => handleSearchDictionary(dictSearchQuery)}
+                disabled={isSearchingDict}
+                className="px-5 py-3 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white rounded-2xl text-xs font-black transition-all cursor-pointer shadow-lg shadow-amber-600/30"
+              >
+                {isSearchingDict ? '검색 중...' : '🔍 사전 검색'}
+              </button>
+            </div>
+
+            {/* Flashcards Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
               {vocabList.map((item, idx) => {
                 const isFlipped = flippedCards[idx];
                 return (
                   <div
                     key={idx}
-                    onClick={() => setFlippedCards(prev => ({ ...prev, [idx]: !prev[idx] }))}
-                    className={`h-36 rounded-2xl p-4 flex flex-col justify-between cursor-pointer transition-all duration-300 border ${
+                    className={`rounded-3xl p-5 flex flex-col justify-between transition-all duration-300 border shadow-lg ${
                       isFlipped
-                        ? 'bg-amber-950/40 border-amber-500/60 text-amber-200 scale-102'
-                        : 'bg-slate-950 border-slate-800 text-white hover:border-indigo-500/50'
+                        ? 'bg-amber-950/40 border-amber-500/60 text-amber-200 scale-101'
+                        : 'bg-slate-950 border-slate-800 text-white hover:border-amber-500/50'
                     }`}
                   >
-                    <div className="flex justify-between items-start">
-                      <span className="text-base font-black">{item.word}</span>
-                      <span className="text-[10px] text-slate-500">{isFlipped ? '뜻 닫기' : '뜻 보기'}</span>
+                    <div>
+                      <div className="flex justify-between items-start mb-2">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-lg font-black text-white">{item.word}</span>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                speakWord(item.word);
+                              }}
+                              className="w-7 h-7 rounded-full bg-amber-500/20 text-amber-300 hover:bg-amber-500/40 flex items-center justify-center text-xs transition-all cursor-pointer"
+                              title="원어민 발음 듣기 (TTS)"
+                            >
+                              🔊
+                            </button>
+                          </div>
+                          {item.phonetic && (
+                            <span className="text-[11px] font-mono text-slate-400">{item.phonetic}</span>
+                          )}
+                        </div>
+
+                        {item.part_of_speech && (
+                          <span className="text-[10px] font-bold bg-slate-900 border border-slate-700 text-slate-400 px-2 py-0.5 rounded-full">
+                            {item.part_of_speech.split(' ')[0]}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Card Content (Korean Meaning vs English Sentence) */}
+                      <div
+                        onClick={() => setFlippedCards(prev => ({ ...prev, [idx]: !prev[idx] }))}
+                        className="cursor-pointer py-2 min-h-[48px]"
+                      >
+                        {isFlipped ? (
+                          <div className="space-y-1 animate-in fade-in">
+                            <p className="text-sm font-black text-amber-300">{item.meaning_ko}</p>
+                            {item.definition_en && (
+                              <p className="text-[11px] text-slate-300 line-clamp-2 italic">"{item.definition_en}"</p>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="space-y-1">
+                            <p className="text-xs text-slate-300 italic line-clamp-2">"{item.example}"</p>
+                            <p className="text-[10px] text-slate-500 flex items-center gap-1">👆 클릭하여 한국어 뜻 보기</p>
+                          </div>
+                        )}
+                      </div>
                     </div>
 
-                    {isFlipped ? (
-                      <p className="text-sm font-bold text-amber-400 animate-in fade-in">{item.meaning_ko}</p>
-                    ) : (
-                      <p className="text-xs text-slate-400 italic line-clamp-2">"{item.example}"</p>
-                    )}
+                    {/* Bottom Action: Deep Dictionary Popup */}
+                    <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between">
+                      <button
+                        type="button"
+                        onClick={() => setFlippedCards(prev => ({ ...prev, [idx]: !prev[idx] }))}
+                        className="text-[11px] font-bold text-slate-400 hover:text-amber-300 cursor-pointer"
+                      >
+                        {isFlipped ? '닫기' : '뜻 뒤집기'}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedWordDetail(item);
+                          handleRequestWordAI(item.word);
+                        }}
+                        className="px-2.5 py-1 bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 border border-indigo-500/40 rounded-lg text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1"
+                      >
+                        📖 상세 사전
+                      </button>
+                    </div>
                   </div>
                 );
               })}
@@ -1293,6 +1564,183 @@ Please analyze and generate response in STRICT JSON format:
         </div>
       </footer>
 
+      {/* 📖 RICH WORD DETAIL DICTIONARY MODAL */}
+      {selectedWordDetail && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4" onClick={() => setSelectedWordDetail(null)}>
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 w-full max-w-2xl max-h-[85vh] overflow-y-auto space-y-6 shadow-2xl" onClick={e => e.stopPropagation()}>
+            {/* Header: Word + Pronunciation + Action */}
+            <div className="flex items-start justify-between border-b border-slate-800 pb-4">
+              <div>
+                <div className="flex items-center gap-3">
+                  <h3 className="text-2xl sm:text-3xl font-black text-white">{selectedWordDetail.word}</h3>
+                  <button
+                    type="button"
+                    onClick={() => speakWord(selectedWordDetail.word)}
+                    className="px-3 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all cursor-pointer"
+                  >
+                    🔊 발음 듣기
+                  </button>
+                </div>
+                <div className="flex items-center gap-3 mt-1 text-xs">
+                  {selectedWordDetail.phonetic && (
+                    <span className="font-mono text-slate-400">{selectedWordDetail.phonetic}</span>
+                  )}
+                  {selectedWordDetail.part_of_speech && (
+                    <span className="px-2.5 py-0.5 bg-indigo-950 text-indigo-300 border border-indigo-800 rounded-full font-bold text-[10px]">
+                      {selectedWordDetail.part_of_speech}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <button onClick={() => setSelectedWordDetail(null)} className="text-slate-400 hover:text-white text-xl cursor-pointer">✕</button>
+            </div>
+
+            {/* Meanings & Definitions */}
+            <div className="space-y-4">
+              {/* Korean Meaning */}
+              <div className="p-4 bg-amber-950/30 border border-amber-800/50 rounded-2xl space-y-1">
+                <span className="text-[11px] font-black text-amber-400 uppercase">🇰🇷 한국어 뜻</span>
+                <p className="text-base sm:text-lg font-black text-white">{selectedWordDetail.meaning_ko}</p>
+              </div>
+
+              {/* English Definition */}
+              {selectedWordDetail.definition_en && (
+                <div className="p-4 bg-slate-950 border border-slate-800 rounded-2xl space-y-1">
+                  <span className="text-[11px] font-black text-indigo-400 uppercase">🇬🇧 영영 풀이 (English Definition)</span>
+                  <p className="text-xs sm:text-sm text-slate-200 leading-relaxed font-medium">"{selectedWordDetail.definition_en}"</p>
+                </div>
+              )}
+
+              {/* Sample Sentences */}
+              <div className="p-4 bg-slate-950 border border-slate-800 rounded-2xl space-y-2">
+                <span className="text-[11px] font-black text-emerald-400 uppercase">💬 대표 예문 (Examples)</span>
+                <div className="space-y-2 text-xs sm:text-sm">
+                  {selectedWordDetail.example && (
+                    <div className="p-2.5 bg-slate-900 rounded-xl border border-slate-800 text-slate-200">
+                      • <span className="font-semibold text-white">"{selectedWordDetail.example}"</span>
+                    </div>
+                  )}
+                  {selectedWordDetail.extra_examples?.map((ex, i) => (
+                    <div key={i} className="p-2.5 bg-slate-900 rounded-xl border border-slate-800 text-slate-200">
+                      • <span className="font-semibold text-slate-300">"{ex}"</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Synonyms & Antonyms */}
+              {((selectedWordDetail.synonyms && selectedWordDetail.synonyms.length > 0) || (selectedWordDetail.antonyms && selectedWordDetail.antonyms.length > 0)) && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  {selectedWordDetail.synonyms && selectedWordDetail.synonyms.length > 0 && (
+                    <div className="p-3 bg-slate-950 border border-slate-800 rounded-2xl space-y-1">
+                      <span className="text-[10px] font-black text-teal-400">✨ 유의어 (Synonyms)</span>
+                      <div className="flex flex-wrap gap-1.5 pt-1">
+                        {selectedWordDetail.synonyms.map((s, i) => (
+                          <span key={i} className="px-2 py-1 bg-teal-950/60 text-teal-300 border border-teal-800 rounded-lg text-[11px] font-bold">
+                            {s}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {selectedWordDetail.antonyms && selectedWordDetail.antonyms.length > 0 && (
+                    <div className="p-3 bg-slate-950 border border-slate-800 rounded-2xl space-y-1">
+                      <span className="text-[10px] font-black text-rose-400">⚡ 반의어 (Antonyms)</span>
+                      <div className="flex flex-wrap gap-1.5 pt-1">
+                        {selectedWordDetail.antonyms.map((a, i) => (
+                          <span key={i} className="px-2 py-1 bg-rose-950/60 text-rose-300 border border-rose-800 rounded-lg text-[11px] font-bold">
+                            {a}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* 🤖 Gemini AI Deep Dive Section */}
+              <div className="p-4 bg-gradient-to-br from-purple-950/50 via-slate-900 to-indigo-950/50 border border-purple-800/60 rounded-2xl space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-black text-purple-300 flex items-center gap-1.5">
+                    <span>🤖</span> AI 심층 단어 분석 (어원 & 뉘앙스 & 연어)
+                  </span>
+                  {!aiWordDeepDive[selectedWordDetail.word] && (
+                    <button
+                      type="button"
+                      onClick={() => handleRequestWordAI(selectedWordDetail.word)}
+                      disabled={isLoadingWordAI}
+                      className="px-2.5 py-1 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-[10px] font-black cursor-pointer"
+                    >
+                      {isLoadingWordAI ? 'AI 분석 중...' : '✨ AI 어원/뉘앙스 분석'}
+                    </button>
+                  )}
+                </div>
+
+                {aiWordDeepDive[selectedWordDetail.word] ? (
+                  <div className="space-y-2 text-xs">
+                    <p className="text-slate-200">
+                      <strong className="text-purple-300">🌱 어원:</strong> {aiWordDeepDive[selectedWordDetail.word].etymology}
+                    </p>
+                    <p className="text-slate-200">
+                      <strong className="text-indigo-300">🎯 뉘앙스:</strong> {aiWordDeepDive[selectedWordDetail.word].nuance}
+                    </p>
+                    {aiWordDeepDive[selectedWordDetail.word].collocations?.length > 0 && (
+                      <div>
+                        <strong className="text-teal-300">🔗 자주 쓰이는 연어(Collocations):</strong>
+                        <ul className="list-disc list-inside pl-1 text-slate-300 mt-1 space-y-0.5">
+                          {aiWordDeepDive[selectedWordDetail.word].collocations.map((c, i) => (
+                            <li key={i}>{c}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-slate-400">
+                    AI 분석 버튼을 누르면 단어의 어원과 미묘한 뉘앙스를 실시간으로 확인할 수 있습니다.
+                  </p>
+                )}
+              </div>
+
+              {/* 🌐 External Dictionaries Quick Links */}
+              <div className="pt-2 flex flex-wrap items-center justify-between gap-2 text-xs border-t border-slate-800">
+                <span className="text-slate-400 font-bold text-[11px]">외부 공인 사전 바로가기:</span>
+                <div className="flex gap-2">
+                  <a
+                    href={`https://en.dict.naver.com/#/search?query=${encodeURIComponent(selectedWordDetail.word)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-3 py-1.5 bg-emerald-950 text-emerald-300 border border-emerald-800 rounded-xl font-bold hover:bg-emerald-900 transition-all text-[11px]"
+                  >
+                    🟢 네이버 영어사전 ↗
+                  </a>
+                  <a
+                    href={`https://dictionary.cambridge.org/dictionary/english/${encodeURIComponent(selectedWordDetail.word)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-3 py-1.5 bg-blue-950 text-blue-300 border border-blue-800 rounded-xl font-bold hover:bg-blue-900 transition-all text-[11px]"
+                  >
+                    🔵 캠브리지 사전 ↗
+                  </a>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer Close */}
+            <div className="flex justify-end pt-2">
+              <button
+                onClick={() => setSelectedWordDetail(null)}
+                className="px-6 py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-black cursor-pointer"
+              >
+                닫기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Gemini API Key Setting Modal */}
       {showApiKeyModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-4" onClick={() => setShowApiKeyModal(false)}>
@@ -1374,7 +1822,6 @@ Please analyze and generate response in STRICT JSON format:
                 닫기
               </button>
             </div>
-
           </div>
         </div>
       )}

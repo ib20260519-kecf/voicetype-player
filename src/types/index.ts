@@ -1,3 +1,15 @@
+// 🏛️ Domain Types & ISP Segregated Interfaces
+
+export type StudyMode = 
+  | 'video' 
+  | 'dictation' 
+  | 'cloze' 
+  | 'shadowing' 
+  | 'slides' 
+  | 'vocab' 
+  | 'idioms' 
+  | 'ib_inquiry';
+
 export interface ClassInfo {
   id: string; // 'class_01'
   name: string; // '1반 (Class 1)'
@@ -46,8 +58,38 @@ export interface IBQuestion {
   sample_answer_en?: string;
 }
 
+export interface DetailedWordInfo {
+  word: string;
+  meaning_ko: string;
+  example?: string;
+  part_of_speech?: string;
+  phonetic?: string;
+  definition_en?: string;
+  synonyms?: string[];
+  antonyms?: string[];
+  extra_examples?: string[];
+}
+
+export interface SocraticFollowUp {
+  step: number;
+  type: 'socratic' | 'feynman' | 'scamper';
+  title: string;
+  question_ko: string;
+  question_en: string;
+  prompt_ko: string;
+}
+
+export interface AIFeedbackResult {
+  rubric: string;
+  strengths_ko: string;
+  konglish_warm_tip_ko: string;
+  polished_en: string;
+  advanced_model_en: string;
+  socratic_followups: SocraticFollowUp[];
+}
+
 export interface Lesson {
-  id: string; // 'lesson_001'
+  id: string;
   title: string;
   description?: string;
   audio_url: string;
@@ -61,7 +103,7 @@ export interface Lesson {
   segments: Segment[];
   slides?: SlideItem[];
   idioms?: IdiomItem[];
-  key_vocabulary?: { word: string; meaning_ko: string; example: string }[];
+  key_vocabulary?: DetailedWordInfo[];
   ib_questions?: IBQuestion[];
   created_by?: string;
 }
@@ -85,8 +127,17 @@ export interface LearningRecord {
   completed: boolean;
   time_spent_sec: number;
   wrong_words: string[];
-  ib_answers?: Record<string, string>;
+  ib_answers?: Record<string, any>;
   completed_at?: string;
   updated_at?: string;
 }
 
+// 🏛️ Base Study Mode Contract (LSP Principle)
+export interface BaseStudyModeProps {
+  lesson: Lesson;
+  segments: Segment[];
+  activeSegmentIndex: number;
+  onJumpToSegment: (index: number) => void;
+  isPlaying?: boolean;
+  onTogglePlay?: () => void;
+}

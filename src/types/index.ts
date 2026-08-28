@@ -38,6 +38,14 @@ export interface IdiomItem {
   type?: string;
 }
 
+export interface IBQuestion {
+  type: 'factual' | 'conceptual' | 'debatable';
+  question_en: string;
+  question_ko: string;
+  inquiry_prompt?: string;
+  sample_answer_en?: string;
+}
+
 export interface Lesson {
   id: string; // 'lesson_001'
   title: string;
@@ -54,6 +62,7 @@ export interface Lesson {
   slides?: SlideItem[];
   idioms?: IdiomItem[];
   key_vocabulary?: { word: string; meaning_ko: string; example: string }[];
+  ib_questions?: IBQuestion[];
   created_by?: string;
 }
 
@@ -76,6 +85,8 @@ export interface LearningRecord {
   completed: boolean;
   time_spent_sec: number;
   wrong_words: string[];
+  ib_answers?: Record<string, string>;
   completed_at?: string;
   updated_at?: string;
 }
+

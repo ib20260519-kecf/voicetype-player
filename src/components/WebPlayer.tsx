@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
-import { Lesson, Segment, StudentInfo, SlideItem, IdiomItem } from '../types';
+import { Lesson, Segment, StudentInfo, SlideItem, IdiomItem, IBQuestion } from '../types';
 
 interface WebPlayerProps {
   lesson: Lesson;
@@ -8,13 +8,13 @@ interface WebPlayerProps {
   onBack: () => void;
 }
 
-type StudyMode = 'video' | 'dictation' | 'cloze' | 'shadowing' | 'slides' | 'vocab' | 'idioms';
+type StudyMode = 'video' | 'dictation' | 'cloze' | 'shadowing' | 'slides' | 'vocab' | 'idioms' | 'ib_inquiry';
 
 export const WebPlayer: React.FC<WebPlayerProps> = ({ lesson, student, onBack }) => {
   const audioRef = useRef<HTMLAudioElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   
-  // Current Mode (Default to 'video' or 'dictation')
+  // Current Mode
   const [currentMode, setCurrentMode] = useState<StudyMode>('video');
 
   // Media State
@@ -76,11 +76,43 @@ export const WebPlayer: React.FC<WebPlayerProps> = ({ lesson, student, onBack })
     }
   ];
 
+  // 6. IB Inquiry Questions State
+  const defaultIBQuestions: IBQuestion[] = [
+    {
+      type: 'factual',
+      question_en: 'What specific action does the speaker advise consumers to take before purchasing an item, and why?',
+      question_ko: '화자는 물건을 구매하기 전에 소비자에게 어떤 구체적인 행동을 하라고 권장하며, 그 이유는 무엇인가요?',
+      inquiry_prompt: '원문에서 언급된 직접적인 행동과 목적을 찾아 영어로 요약해 보세요.',
+      sample_answer_en: 'The speaker advises checking the price of the item before buying because it helps make smart financial decisions and save money.'
+    },
+    {
+      type: 'conceptual',
+      question_en: 'How does price awareness foster responsible decision-making and sustainable consumer habits in daily life?',
+      question_ko: '가격에 대한 인식이 일상생활에서 책임감 있는 의사결정과 지속 가능한 소비 습관을 어떻게 형성하나요?',
+      inquiry_prompt: '가격 확인이라는 단순한 행동이 개인의 재정 관리와 소비 패턴에 미치는 영향(개념)을 서술하세요.',
+      sample_answer_en: 'Price awareness encourages consumers to evaluate the true value of products rather than buying impulsively, leading to long-term financial stability.'
+    },
+    {
+      type: 'debatable',
+      question_en: 'To what extent does impulse buying in modern digital markets threaten personal financial independence?',
+      question_ko: '현대 디지털 시장에서의 충동구매는 개인의 재정적 독립을 어느 정도까지 위협한다고 생각하나요?',
+      inquiry_prompt: '자신의 의견(동의/반대/절충)을 정하고, 설득력 있는 논거와 구체적인 예시를 들어 영어 에세이로 작성하세요.',
+      sample_answer_en: 'In my perspective, impulse buying poses a significant threat because aggressive digital marketing and easy mobile payments make spending frictionless, often undermining long-term financial goals.'
+    }
+  ];
+
+  const ibQuestions: IBQuestion[] = lesson.ib_questions && lesson.ib_questions.length > 0
+    ? lesson.ib_questions
+    : defaultIBQuestions;
+
+  const [ibAnswers, setIbAnswers] = useState<Record<number, string>>({});
+  const [showSampleAnswer, setShowSampleAnswer] = useState<Record<number, boolean>>({});
+
   // Submission State
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [showResultModal, setShowResultModal] = useState<boolean>(false);
 
-  // Initialize Speech Recognition (Web Speech API)
+  // Initialize Speech Recognition
   useEffect(() => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (SpeechRecognition) {
@@ -238,6 +270,7 @@ export const WebPlayer: React.FC<WebPlayerProps> = ({ lesson, student, onBack })
           completed: true,
           time_spent_sec: Math.round(currentTime),
           wrong_words: wrongWords,
+          ib_answers: ibAnswers,
           completed_at: new Date().toISOString()
         }, { onConflict: 'student_id,lesson_id' });
       }
@@ -259,7 +292,7 @@ export const WebPlayer: React.FC<WebPlayerProps> = ({ lesson, student, onBack })
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-between">
-      {/* Hidden Audio element for non-video mode or fallback */}
+      {/* Audio element for non-video playback */}
       <audio ref={audioRef} src={lesson.audio_url} preload="auto" />
 
       {/* Top Header & Multi-Mode Navigation */}
@@ -286,23 +319,24 @@ export const WebPlayer: React.FC<WebPlayerProps> = ({ lesson, student, onBack })
           </button>
         </div>
 
-        {/* 7 Study Mode Tabs */}
+        {/* 8 Study Mode Tabs */}
         <div className="max-w-5xl mx-auto flex gap-1.5 overflow-x-auto pb-1">
           {[
-            { id: 'video', name: '🎬 비디오/영상 시청', color: 'rose' },
-            { id: 'dictation', name: '🎧 풀 받아쓰기', color: 'indigo' },
-            { id: 'cloze', name: '🧩 빈칸 채우기', color: 'blue' },
-            { id: 'shadowing', name: '🎙️ 섀도잉 & 발음평가', color: 'pink' },
-            { id: 'slides', name: '📊 AI 슬라이드 강의', color: 'purple' },
-            { id: 'vocab', name: '🗂️ 단어장 & 퀴즈', color: 'amber' },
-            { id: 'idioms', name: '💡 핵심 숙어/이디엄', color: 'teal' }
+            { id: 'video', name: '🎬 비디오/영상 시청' },
+            { id: 'ib_inquiry', name: '🧠 IB 심층 탐구 질문' },
+            { id: 'dictation', name: '🎧 풀 받아쓰기' },
+            { id: 'cloze', name: '🧩 빈칸 채우기' },
+            { id: 'shadowing', name: '🎙️ 섀도잉 & 발음평가' },
+            { id: 'slides', name: '📊 AI 슬라이드 강의' },
+            { id: 'vocab', name: '🗂️ 단어장 & 퀴즈' },
+            { id: 'idioms', name: '💡 핵심 숙어/이디엄' }
           ].map(tab => (
             <button
               key={tab.id}
               onClick={() => setCurrentMode(tab.id as StudyMode)}
               className={`px-3.5 py-2 rounded-xl text-xs font-black whitespace-nowrap transition-all cursor-pointer ${
                 currentMode === tab.id
-                  ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-md shadow-indigo-600/30 scale-102'
+                  ? 'bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 text-white shadow-lg shadow-indigo-600/30 scale-102'
                   : 'bg-slate-800/80 text-slate-400 hover:text-white hover:bg-slate-700'
               }`}
             >
@@ -316,11 +350,99 @@ export const WebPlayer: React.FC<WebPlayerProps> = ({ lesson, student, onBack })
       <main className="max-w-4xl w-full mx-auto p-4 sm:p-6 flex-1 flex flex-col justify-center space-y-6">
 
         {/* ─────────────────────────────────────────────────────────────
-            MODE 0: Video / YouTube Watch Mode (비디오 동시 시청 모드)
+            MODE: IB Inquiry Questions (IB 3단계 심층 탐구 질문)
+        ────────────────────────────────────────────────────────────── */}
+        {currentMode === 'ib_inquiry' && (
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b border-slate-800 pb-4">
+              <div>
+                <h3 className="text-lg font-black text-white flex items-center gap-2">
+                  <span>🧠</span> IB Inquiry & Critical Thinking (IB 심층 탐구 서술)
+                </h3>
+                <p className="text-xs text-slate-400 mt-1">
+                  사실 확인(Factual)부터 개념 이해(Conceptual), 비판적 토론(Debatable)까지 자신의 생각을 영어로 작성해 보세요.
+                </p>
+              </div>
+              <span className="px-3 py-1 bg-purple-950 text-purple-300 border border-purple-800 rounded-full text-xs font-black">
+                IB 3단계 탐구
+              </span>
+            </div>
+
+            <div className="space-y-6">
+              {ibQuestions.map((q, idx) => {
+                const typeBadge = {
+                  factual: { label: '📌 1단계: Factual (사실적 질문)', color: 'bg-blue-950 text-blue-300 border-blue-800' },
+                  conceptual: { label: '💡 2단계: Conceptual (개념적 질문)', color: 'bg-purple-950 text-purple-300 border-purple-800' },
+                  debatable: { label: '⚖️ 3단계: Debatable (심층 토론 질문)', color: 'bg-pink-950 text-pink-300 border-pink-800' }
+                }[q.type];
+
+                return (
+                  <div key={idx} className="bg-slate-950 border border-slate-800 rounded-2xl p-5 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <span className={`px-2.5 py-1 rounded-lg text-xs font-black border ${typeBadge.color}`}>
+                        {typeBadge.label}
+                      </span>
+                    </div>
+
+                    <div className="space-y-1">
+                      <h4 className="text-base font-black text-white leading-relaxed">
+                        {idx + 1}. {q.question_en}
+                      </h4>
+                      <p className="text-xs text-slate-400">
+                        👉 {q.question_ko}
+                      </p>
+                      {q.inquiry_prompt && (
+                        <p className="text-[11px] text-indigo-400 font-semibold pt-1">
+                          💡 탐구 가이드: {q.inquiry_prompt}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Student Essay / Answer Input */}
+                    <div className="space-y-2">
+                      <textarea
+                        rows={3}
+                        placeholder="이 질문에 대한 당신의 생각과 답변을 영어(또는 한국어)로 서술하세요..."
+                        value={ibAnswers[idx] || ''}
+                        onChange={e => setIbAnswers(prev => ({ ...prev, [idx]: e.target.value }))}
+                        className="w-full bg-slate-900 border border-slate-700 focus:border-indigo-500 rounded-xl p-3.5 text-xs sm:text-sm text-white font-medium outline-none leading-relaxed placeholder:text-slate-600"
+                      />
+
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-slate-500 text-[11px]">
+                          작성된 답변은 과제 제출 시 선생님께 자동 전달됩니다.
+                        </span>
+                        {q.sample_answer_en && (
+                          <button
+                            type="button"
+                            onClick={() => setShowSampleAnswer(prev => ({ ...prev, [idx]: !prev[idx] }))}
+                            className="text-purple-400 hover:text-purple-300 font-bold cursor-pointer"
+                          >
+                            {showSampleAnswer[idx] ? '🙈 모범 가이드 가리기' : '🤖 AI 모범 생각 가이드'}
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Sample Answer Box */}
+                      {showSampleAnswer[idx] && q.sample_answer_en && (
+                        <div className="p-3.5 bg-purple-950/40 border border-purple-900/60 rounded-xl text-xs text-purple-200 space-y-1 animate-in fade-in">
+                          <p className="font-bold text-purple-300">✨ 모범 서술 가이드 (Sample Answer):</p>
+                          <p className="italic">"{q.sample_answer_en}"</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* ─────────────────────────────────────────────────────────────
+            MODE 0: Video / YouTube Watch Mode
         ────────────────────────────────────────────────────────────── */}
         {currentMode === 'video' && (
           <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl space-y-4 p-4 sm:p-6">
-            {/* Video Player Container */}
             <div className="relative aspect-video max-w-2xl mx-auto rounded-2xl overflow-hidden bg-black border border-slate-800 shadow-xl">
               {isVideoSource ? (
                 <video
@@ -343,7 +465,6 @@ export const WebPlayer: React.FC<WebPlayerProps> = ({ lesson, student, onBack })
               )}
             </div>
 
-            {/* Current Highlighted Subtitle */}
             <div className="p-4 bg-indigo-950/40 border border-indigo-900/60 rounded-2xl text-center space-y-1">
               <span className="text-[10px] font-black text-indigo-400 uppercase tracking-wider">
                 현재 재생 중인 문장 (Sentence {activeSegmentIndex + 1} / {segments.length})
@@ -353,7 +474,6 @@ export const WebPlayer: React.FC<WebPlayerProps> = ({ lesson, student, onBack })
               </p>
             </div>
 
-            {/* Interactive Timeline Script List */}
             <div className="space-y-1.5 max-h-48 overflow-y-auto p-2 bg-slate-950/80 rounded-2xl border border-slate-800">
               {segments.map((seg, idx) => {
                 const isCurrent = idx === activeSegmentIndex;
@@ -581,7 +701,7 @@ export const WebPlayer: React.FC<WebPlayerProps> = ({ lesson, student, onBack })
         )}
 
         {/* ─────────────────────────────────────────────────────────────
-            MODE 5: Vocab Flashcards & Quiz (단어장 및 퀴즈)
+            MODE 5: Vocab Flashcards & Quiz (단어장)
         ────────────────────────────────────────────────────────────── */}
         {currentMode === 'vocab' && (
           <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6">
@@ -765,7 +885,7 @@ export const WebPlayer: React.FC<WebPlayerProps> = ({ lesson, student, onBack })
             </div>
             <h3 className="text-2xl font-black text-white">과제가 성공적으로 제출되었습니다!</h3>
             <p className="text-xs text-slate-400">
-              선생님 LMS 대시보드에 학습 기록이 실시간으로 등록되었습니다.
+              선생님 LMS 대시보드에 학습 기록 및 작성하신 IB 탐구 답변이 실시간으로 등록되었습니다.
             </p>
 
             <button

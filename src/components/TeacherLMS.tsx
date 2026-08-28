@@ -23,6 +23,11 @@ export const TeacherLMS: React.FC<TeacherLMSProps> = ({ onBackToStudentMode }) =
   const [isSavingRoster, setIsSavingRoster] = useState<boolean>(false);
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string>('');
 
+  // Selected Student for IB Answers View
+  const [selectedIBStudent, setSelectedIBStudent] = useState<{ student: StudentInfo; record?: LearningRecord } | null>(null);
+
+
+
   // Cloud Config Prompt State
   const [showConfigModal, setShowConfigModal] = useState<boolean>(false);
   const [customUrl, setCustomUrl] = useState(localStorage.getItem('vt_supabase_url') || '');
@@ -354,6 +359,7 @@ export const TeacherLMS: React.FC<TeacherLMSProps> = ({ onBackToStudentMode }) =
                       <th className="px-6 py-3.5">학생 이름</th>
                       <th className="px-6 py-3.5">과제 제출 상태</th>
                       <th className="px-6 py-3.5">받아쓰기 점수</th>
+                      <th className="px-6 py-3.5">IB 서술형 답변</th>
                       <th className="px-6 py-3.5">학습 시간</th>
                       <th className="px-6 py-3.5">최종 제출일시</th>
                     </tr>
@@ -362,6 +368,7 @@ export const TeacherLMS: React.FC<TeacherLMSProps> = ({ onBackToStudentMode }) =
                     {students.map(s => {
                       const record = records.find(r => r.student_id === s.id);
                       const isCompleted = record?.completed;
+                      const hasIB = record?.ib_answers && Object.keys(record.ib_answers).length > 0;
 
                       return (
                         <tr key={s.id} className="hover:bg-slate-800/40 transition-colors">
@@ -391,6 +398,18 @@ export const TeacherLMS: React.FC<TeacherLMSProps> = ({ onBackToStudentMode }) =
                               <span className="text-slate-600">—</span>
                             )}
                           </td>
+                          <td className="px-6 py-3.5">
+                            {hasIB ? (
+                              <button
+                                onClick={() => setSelectedIBStudent({ student: s, record })}
+                                className="px-2.5 py-1 bg-purple-900/60 text-purple-300 border border-purple-700/60 hover:bg-purple-800/80 rounded-lg font-bold text-[11px] transition-all cursor-pointer"
+                              >
+                                🧠 답변 보기 ({Object.keys(record?.ib_answers || {}).length}개)
+                              </button>
+                            ) : (
+                              <span className="text-slate-600 text-[11px]">미작성</span>
+                            )}
+                          </td>
                           <td className="px-6 py-3.5 text-slate-400">
                             {record ? `${Math.floor((record.time_spent_sec || 0) / 60)}분 ${(record.time_spent_sec || 0) % 60}초` : '—'}
                           </td>
@@ -406,6 +425,7 @@ export const TeacherLMS: React.FC<TeacherLMSProps> = ({ onBackToStudentMode }) =
             </div>
           </div>
         )}
+
 
         {/* TAB 2: 반 이름 및 30명 학생 명단 직접 편집기 */}
         {activeTab === 'manage_students' && (
@@ -586,6 +606,48 @@ export const TeacherLMS: React.FC<TeacherLMSProps> = ({ onBackToStudentMode }) =
           </div>
         </div>
       )}
+
+      {/* Selected Student IB Answers Modal */}
+      {selectedIBStudent && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-4" onClick={() => setSelectedIBStudent(null)}>
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 w-full max-w-2xl max-h-[85vh] overflow-y-auto space-y-6 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+              <div>
+                <h3 className="text-lg font-black text-white flex items-center gap-2">
+                  <span>🧠</span> [{selectedIBStudent.student.name}] 학생의 IB 심층 탐구 서술형 답변
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  학급: {editClassName} | 번호: {selectedIBStudent.student.student_no}번
+                </p>
+              </div>
+              <button onClick={() => setSelectedIBStudent(null)} className="text-slate-400 hover:text-white text-xl">✕</button>
+            </div>
+
+            <div className="space-y-4">
+              {Object.entries(selectedIBStudent.record?.ib_answers || {}).map(([qIdx, answerText]) => (
+                <div key={qIdx} className="bg-slate-950 border border-slate-800 rounded-2xl p-4 space-y-2">
+                  <span className="text-xs font-black text-purple-400">
+                    질문 #{Number(qIdx) + 1}
+                  </span>
+                  <div className="p-3 bg-slate-900 rounded-xl text-xs sm:text-sm font-medium text-white leading-relaxed border border-slate-800">
+                    {answerText || '(내용 없음)'}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <button
+                onClick={() => setSelectedIBStudent(null)}
+                className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-black cursor-pointer"
+              >
+                확인 완료
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
+

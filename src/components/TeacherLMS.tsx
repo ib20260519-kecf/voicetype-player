@@ -178,6 +178,33 @@ export const TeacherLMS: React.FC<TeacherLMSProps> = ({ onBackToStudentMode }) =
     setBatchNamesInput('');
   };
 
+  // Export Students Grade Report to CSV (Excel compatible)
+  const handleExportCSV = () => {
+    const headers = ['학급', '출석번호', '학생이름', '제출상태', '받아쓰기점수(%)', '학습시간(초)', '제출일시'];
+    const rows = students.map(s => {
+      const rec = records.find(r => r.student_id === s.id);
+      return [
+        `"${editClassName}"`,
+        s.student_no,
+        `"${s.name}"`,
+        rec?.completed ? '제출완료' : '미제출',
+        rec?.accuracy_score || 0,
+        rec?.time_spent_sec || 0,
+        rec?.completed_at ? `"${new Date(rec.completed_at).toLocaleString('ko-KR')}"` : '""'
+      ];
+    });
+
+    const csvContent = '\uFEFF' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `${editClassName}_성적표_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const handleSaveConfig = () => {
     initSupabaseClient(customUrl.trim(), customKey.trim());
     setShowConfigModal(false);
@@ -208,6 +235,12 @@ export const TeacherLMS: React.FC<TeacherLMSProps> = ({ onBackToStudentMode }) =
 
           <div className="flex items-center gap-2">
             <button
+              onClick={handleExportCSV}
+              className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1"
+            >
+              📥 성적표 엑셀(CSV) 다운로드
+            </button>
+            <button
               onClick={() => setShowConfigModal(true)}
               className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-xs font-bold text-slate-300 transition-all cursor-pointer"
             >
@@ -221,6 +254,7 @@ export const TeacherLMS: React.FC<TeacherLMSProps> = ({ onBackToStudentMode }) =
             </button>
           </div>
         </div>
+
 
         {/* Mode Tabs: 'progress' (진도 현황) vs 'manage_students' (명단 관리) */}
         <div className="flex border-b border-slate-800 bg-slate-900/60 p-1.5 rounded-2xl gap-2">

@@ -8,20 +8,21 @@ interface WebPlayerProps {
   onBack: () => void;
 }
 
-type StudyMode = 'dictation' | 'cloze' | 'shadowing' | 'slides' | 'vocab' | 'idioms';
+type StudyMode = 'video' | 'dictation' | 'cloze' | 'shadowing' | 'slides' | 'vocab' | 'idioms';
 
 export const WebPlayer: React.FC<WebPlayerProps> = ({ lesson, student, onBack }) => {
   const audioRef = useRef<HTMLAudioElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
   
-  // Current Mode
-  const [currentMode, setCurrentMode] = useState<StudyMode>('dictation');
+  // Current Mode (Default to 'video' or 'dictation')
+  const [currentMode, setCurrentMode] = useState<StudyMode>('video');
 
-  // Audio State
+  // Media State
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [currentTime, setCurrentTime] = useState<number>(0);
   const [duration, setDuration] = useState<number>(lesson.duration_sec || 0);
   const [playbackRate, setPlaybackRate] = useState<number>(1.0);
-  const [isLoopingSegment, setIsLoopingSegment] = useState<boolean>(true);
+  const [isLoopingSegment, setIsLoopingSegment] = useState<boolean>(false);
   
   // Segments State
   const segments: Segment[] = lesson.segments || [];
@@ -44,16 +45,12 @@ export const WebPlayer: React.FC<WebPlayerProps> = ({ lesson, student, onBack })
 
   // 4. Vocab Flashcard & Quiz State
   const vocabList = lesson.key_vocabulary || [
-    { word: 'artificial', meaning_ko: '인공적인, 인위적인', example: 'Artificial intelligence is evolving rapidly.' },
-    { word: 'intelligence', meaning_ko: '지능, 총명', example: 'Human intelligence is uniquely creative.' },
-    { word: 'practice', meaning_ko: '연습하다, 실행하다', example: 'Practice makes perfect.' },
-    { word: 'shopping', meaning_ko: '쇼핑, 장보기', example: 'Smart shopping saves your budget.' },
-    { word: 'price', meaning_ko: '가격, 물가', example: 'Always compare the price.' }
+    { word: 'smart', meaning_ko: '현명한, 똑똑한', example: 'Smart shopping saves money.' },
+    { word: 'jacket', meaning_ko: '재킷, 상의', example: 'Can you check the price of this jacket?' },
+    { word: 'check', meaning_ko: '확인하다', example: 'Always check the price before you buy.' },
+    { word: 'price', meaning_ko: '가격, 물가', example: 'I did not see the price here.' }
   ];
   const [flippedCards, setFlippedCards] = useState<Record<number, boolean>>({});
-  const [quizIndex, setQuizIndex] = useState<number>(0);
-  const [selectedQuizAnswer, setSelectedQuizAnswer] = useState<number | null>(null);
-  const [vocabQuizScore, setVocabQuizScore] = useState<number>(0);
 
   // 5. Slides & Idioms
   const slides: SlideItem[] = lesson.slides && lesson.slides.length > 0 ? lesson.slides : [
@@ -97,96 +94,83 @@ export const WebPlayer: React.FC<WebPlayerProps> = ({ lesson, student, onBack })
         setSpokenText(text);
         setIsRecording(false);
 
-        // Score Speech
         if (segments[activeSegmentIndex]) {
           const score = calculateAccuracy(segments[activeSegmentIndex].text, text);
           setSpeechScores(prev => ({ ...prev, [activeSegmentIndex]: score }));
         }
       };
 
-      recognition.onerror = () => {
-        setIsRecording(false);
-      };
-
-      recognition.onend = () => {
-        setIsRecording(false);
-      };
-
+      recognition.onerror = () => setIsRecording(false);
+      recognition.onend = () => setIsRecording(false);
       recognitionRef.current = recognition;
     }
   }, [activeSegmentIndex, segments]);
 
-  // Audio Time Update Listener
+  // Audio / Video Time Update Listener
   useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
+    const mediaEl = currentMode === 'video' && videoRef.current ? videoRef.current : audioRef.current;
+    if (!mediaEl) return;
 
     const handleTimeUpdate = () => {
-      const t = audio.currentTime;
+      const t = mediaEl.currentTime;
       setCurrentTime(t);
 
-      // Find current active segment
       const curIdx = segments.findIndex(s => t >= s.start && t <= s.end);
       if (curIdx !== -1 && curIdx !== activeSegmentIndex) {
         setActiveSegmentIndex(curIdx);
       }
 
-      // Loop active segment if enabled
       if (isLoopingSegment && segments[activeSegmentIndex]) {
         const seg = segments[activeSegmentIndex];
         if (t >= seg.end) {
-          audio.currentTime = seg.start;
-          audio.play();
+          mediaEl.currentTime = seg.start;
+          mediaEl.play();
         }
       }
     };
 
     const handleLoadedMetadata = () => {
-      if (audio.duration) setDuration(audio.duration);
+      if (mediaEl.duration) setDuration(mediaEl.duration);
     };
 
-    audio.addEventListener('timeupdate', handleTimeUpdate);
-    audio.addEventListener('loadedmetadata', handleLoadedMetadata);
+    mediaEl.addEventListener('timeupdate', handleTimeUpdate);
+    mediaEl.addEventListener('loadedmetadata', handleLoadedMetadata);
 
     return () => {
-      audio.removeEventListener('timeupdate', handleTimeUpdate);
-      audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
+      mediaEl.removeEventListener('timeupdate', handleTimeUpdate);
+      mediaEl.removeEventListener('loadedmetadata', handleLoadedMetadata);
     };
-  }, [segments, activeSegmentIndex, isLoopingSegment]);
+  }, [segments, activeSegmentIndex, isLoopingSegment, currentMode]);
 
-  // Play / Pause Toggle
+  // Sync Video & Audio Play/Pause
   const togglePlay = () => {
-    const audio = audioRef.current;
-    if (!audio) return;
+    const mediaEl = currentMode === 'video' && videoRef.current ? videoRef.current : audioRef.current;
+    if (!mediaEl) return;
     if (isPlaying) {
-      audio.pause();
+      mediaEl.pause();
       setIsPlaying(false);
     } else {
-      audio.play();
+      mediaEl.play();
       setIsPlaying(true);
     }
   };
 
-  // Jump to specific segment
   const jumpToSegment = (idx: number) => {
-    const audio = audioRef.current;
-    if (!audio || !segments[idx]) return;
+    const mediaEl = currentMode === 'video' && videoRef.current ? videoRef.current : audioRef.current;
+    if (!mediaEl || !segments[idx]) return;
     setActiveSegmentIndex(idx);
     setSpokenText('');
-    audio.currentTime = segments[idx].start;
-    audio.play();
+    mediaEl.currentTime = segments[idx].start;
+    mediaEl.play();
     setIsPlaying(true);
   };
 
-  // Change Playback Speed
   const handleRateChange = (rate: number) => {
     setPlaybackRate(rate);
-    if (audioRef.current) {
-      audioRef.current.playbackRate = rate;
-    }
+    if (audioRef.current) audioRef.current.playbackRate = rate;
+    if (videoRef.current) videoRef.current.playbackRate = rate;
   };
 
-  // Calculate Accuracy
   const calculateAccuracy = (target: string, input: string): number => {
     const cleanTarget = target.toLowerCase().replace(/[^a-z0-9 ]/g, '').trim();
     const cleanInput = input.toLowerCase().replace(/[^a-z0-9 ]/g, '').trim();
@@ -204,7 +188,6 @@ export const WebPlayer: React.FC<WebPlayerProps> = ({ lesson, student, onBack })
     return Math.round((matchCount / Math.max(targetWords.length, 1)) * 100);
   };
 
-  // Generate Cloze text (hides every 2nd or 3rd long word)
   const getClozeSentence = (text: string) => {
     const words = text.split(' ');
     return words.map((w, i) => {
@@ -216,7 +199,6 @@ export const WebPlayer: React.FC<WebPlayerProps> = ({ lesson, student, onBack })
     }).join(' ');
   };
 
-  // Start Speech Recognition
   const toggleSpeechRecording = () => {
     if (!recognitionRef.current) {
       alert('이 브라우저는 음성 인식을 지원하지 않습니다. Chrome 브라우저를 권장합니다.');
@@ -232,7 +214,6 @@ export const WebPlayer: React.FC<WebPlayerProps> = ({ lesson, student, onBack })
     }
   };
 
-  // Final Submit to Supabase
   const handleFinalSubmit = async () => {
     setIsSubmitting(true);
     const totalSegments = segments.length;
@@ -242,9 +223,7 @@ export const WebPlayer: React.FC<WebPlayerProps> = ({ lesson, student, onBack })
     segments.forEach((s, i) => {
       const sc = segmentScores[i] || clozeScores[i] || speechScores[i] || 0;
       totalScore += sc;
-      if (sc < 80) {
-        wrongWords.push(s.text);
-      }
+      if (sc < 80) wrongWords.push(s.text);
     });
 
     const averageAccuracy = totalSegments > 0 ? Math.round(totalScore / totalSegments) : 100;
@@ -276,9 +255,11 @@ export const WebPlayer: React.FC<WebPlayerProps> = ({ lesson, student, onBack })
   const currentClozeScore = clozeScores[activeSegmentIndex] || 0;
   const currentSpeechScore = speechScores[activeSegmentIndex] || 0;
 
+  const isVideoSource = lesson.audio_url.endsWith('.mp4') || lesson.video_url;
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-between">
-      {/* Audio Element */}
+      {/* Hidden Audio element for non-video mode or fallback */}
       <audio ref={audioRef} src={lesson.audio_url} preload="auto" />
 
       {/* Top Header & Multi-Mode Navigation */}
@@ -305,9 +286,10 @@ export const WebPlayer: React.FC<WebPlayerProps> = ({ lesson, student, onBack })
           </button>
         </div>
 
-        {/* 6 Study Mode Tabs */}
+        {/* 7 Study Mode Tabs */}
         <div className="max-w-5xl mx-auto flex gap-1.5 overflow-x-auto pb-1">
           {[
+            { id: 'video', name: '🎬 비디오/영상 시청', color: 'rose' },
             { id: 'dictation', name: '🎧 풀 받아쓰기', color: 'indigo' },
             { id: 'cloze', name: '🧩 빈칸 채우기', color: 'blue' },
             { id: 'shadowing', name: '🎙️ 섀도잉 & 발음평가', color: 'pink' },
@@ -330,8 +312,74 @@ export const WebPlayer: React.FC<WebPlayerProps> = ({ lesson, student, onBack })
         </div>
       </header>
 
-      {/* Main Mode Body */}
+      {/* Main Study Body */}
       <main className="max-w-4xl w-full mx-auto p-4 sm:p-6 flex-1 flex flex-col justify-center space-y-6">
+
+        {/* ─────────────────────────────────────────────────────────────
+            MODE 0: Video / YouTube Watch Mode (비디오 동시 시청 모드)
+        ────────────────────────────────────────────────────────────── */}
+        {currentMode === 'video' && (
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl space-y-4 p-4 sm:p-6">
+            {/* Video Player Container */}
+            <div className="relative aspect-video max-w-2xl mx-auto rounded-2xl overflow-hidden bg-black border border-slate-800 shadow-xl">
+              {isVideoSource ? (
+                <video
+                  ref={videoRef}
+                  src={lesson.video_url || lesson.audio_url}
+                  className="w-full h-full object-contain"
+                  controls
+                  playsInline
+                  onPlay={() => setIsPlaying(true)}
+                  onPause={() => setIsPlaying(false)}
+                />
+              ) : (
+                <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-indigo-950 to-slate-950 p-6 text-center space-y-3">
+                  <div className="w-16 h-16 bg-rose-500/20 text-rose-400 rounded-full flex items-center justify-center text-3xl">
+                    🎬
+                  </div>
+                  <h3 className="text-base font-black text-white">{lesson.title}</h3>
+                  <p className="text-xs text-slate-400">오디오 스트리밍과 실시간 싱크 자막이 함께 재생됩니다.</p>
+                </div>
+              )}
+            </div>
+
+            {/* Current Highlighted Subtitle */}
+            <div className="p-4 bg-indigo-950/40 border border-indigo-900/60 rounded-2xl text-center space-y-1">
+              <span className="text-[10px] font-black text-indigo-400 uppercase tracking-wider">
+                현재 재생 중인 문장 (Sentence {activeSegmentIndex + 1} / {segments.length})
+              </span>
+              <p className="text-base sm:text-lg font-black text-white">
+                "{activeSegment.text}"
+              </p>
+            </div>
+
+            {/* Interactive Timeline Script List */}
+            <div className="space-y-1.5 max-h-48 overflow-y-auto p-2 bg-slate-950/80 rounded-2xl border border-slate-800">
+              {segments.map((seg, idx) => {
+                const isCurrent = idx === activeSegmentIndex;
+                return (
+                  <div
+                    key={idx}
+                    onClick={() => jumpToSegment(idx)}
+                    className={`p-2.5 rounded-xl text-xs font-semibold cursor-pointer transition-all flex items-center justify-between ${
+                      isCurrent
+                        ? 'bg-indigo-600 text-white font-bold shadow-md'
+                        : 'text-slate-400 hover:bg-slate-800/80 hover:text-white'
+                    }`}
+                  >
+                    <span className="truncate flex-1 pr-2">
+                      <span className="font-mono opacity-60 mr-2">{idx + 1}.</span>
+                      {seg.text}
+                    </span>
+                    <span className="font-mono text-[10px] opacity-60">
+                      {Math.floor(seg.start)}s
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* ─────────────────────────────────────────────────────────────
             MODE 1: Full Dictation (풀 받아쓰기)
@@ -458,7 +506,6 @@ export const WebPlayer: React.FC<WebPlayerProps> = ({ lesson, student, onBack })
               </h3>
             </div>
 
-            {/* Mic Record Button */}
             <div className="py-4 space-y-3">
               <button
                 type="button"
@@ -476,7 +523,6 @@ export const WebPlayer: React.FC<WebPlayerProps> = ({ lesson, student, onBack })
               </p>
             </div>
 
-            {/* Recognized Speech Result */}
             {spokenText && (
               <div className="p-4 bg-slate-950 border border-slate-800 rounded-2xl space-y-1">
                 <p className="text-xs font-bold text-slate-500">인식된 나의 발음:</p>
@@ -603,7 +649,7 @@ export const WebPlayer: React.FC<WebPlayerProps> = ({ lesson, student, onBack })
           </div>
         )}
 
-        {/* Quick Sentence Switcher (1, 2, 3...) */}
+        {/* Quick Sentence Switcher */}
         {['dictation', 'cloze', 'shadowing'].includes(currentMode) && (
           <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-3 flex gap-1.5 overflow-x-auto">
             {segments.map((_, i) => {
@@ -641,6 +687,7 @@ export const WebPlayer: React.FC<WebPlayerProps> = ({ lesson, student, onBack })
                 const val = Number(e.target.value);
                 setCurrentTime(val);
                 if (audioRef.current) audioRef.current.currentTime = val;
+                if (videoRef.current) videoRef.current.currentTime = val;
               }}
               className="flex-1 accent-indigo-500 cursor-pointer h-1.5 bg-slate-800 rounded-lg"
             />
@@ -668,7 +715,8 @@ export const WebPlayer: React.FC<WebPlayerProps> = ({ lesson, student, onBack })
             <div className="flex items-center gap-3">
               <button
                 onClick={() => {
-                  if (audioRef.current) audioRef.current.currentTime = Math.max(0, currentTime - 5);
+                  const mediaEl = currentMode === 'video' && videoRef.current ? videoRef.current : audioRef.current;
+                  if (mediaEl) mediaEl.currentTime = Math.max(0, currentTime - 5);
                 }}
                 className="p-2.5 text-slate-400 hover:text-white text-base cursor-pointer"
                 title="5초 뒤로"
@@ -685,7 +733,8 @@ export const WebPlayer: React.FC<WebPlayerProps> = ({ lesson, student, onBack })
 
               <button
                 onClick={() => {
-                  if (audioRef.current) audioRef.current.currentTime = Math.min(duration, currentTime + 5);
+                  const mediaEl = currentMode === 'video' && videoRef.current ? videoRef.current : audioRef.current;
+                  if (mediaEl) mediaEl.currentTime = Math.min(duration, currentTime + 5);
                 }}
                 className="p-2.5 text-slate-400 hover:text-white text-base cursor-pointer"
                 title="5초 앞으로"

@@ -43,6 +43,8 @@ export interface Lesson {
   title: string;
   description?: string;
   audio_url: string;
+  video_url?: string;
+  youtube_id?: string;
   duration_sec: number;
   word_count: number;
   level: string;

@@ -2,7 +2,8 @@
 
 > **프로젝트 공식 명칭:** VoiceType Hybrid Web Platform (AI Powered IB Inquiry & Critical Thinking LMS)  
 > **최종 갱신 일자:** 2026년 8월 28일  
-> **상태:** ✅ 프로덕션 배포 및 실시간 가동 중 (Vercel + Supabase + Google Gemini AI)
+> **아키텍처 상태:** ✅ **SOLID 5대 원칙 완벽 준수 엔터프라이즈급 클린 아키텍처**  
+> **배포 상태:** ✅ 프로덕션 배포 및 실시간 가동 중 (Vercel + Supabase + Google Gemini AI)
 
 ---
 
@@ -41,7 +42,7 @@
 4. 🧩 **빈칸 채우기 (Cloze Test)**: 첫 글자 힌트 기반 빈칸 완성 훈련
 5. 🎙️ **섀도잉 & 발음평가 (Shadowing)**: Web Speech API 마이크 녹음 및 실시간 발음 유사도 채점
 6. 📊 **AI 슬라이드 강의 (Slide Lecture)**: 핵심 문장, 문법 팁, 한국어 해설 뷰어
-7. 📖 **스마트 단어장 & 영한/영영사전 (신규 대폭 강화)**:
+7. 📖 **스마트 단어장 & 영한/영영사전**:
    - 🔊 **원어민 발음 듣기 (TTS)** 원클릭 재생
    - 📖 **심층 사전 모달**: 품사, 발음기호(IPA), 영영 풀이, 한국어 뜻, 대표 예문, 유의어/반의어
    - 🤖 **Gemini AI 심층 어원/뉘앙스/연어(Collocation) 분석**
@@ -63,48 +64,100 @@
   3. ⚡ **SCAMPER 발상 전환**: 규칙을 뒤집거나 대체하는 창의적 질문
 * **대화형 문답 인터랙션**: 학생이 후속 질문에 대해 생각을 이어 타이핑하고 교사 LMS로 최종 제출.
 
+### 📌 Phase 7: SOLID 원칙 기반 엔터프라이즈급 클린 아키텍처 확립 (신규 완료)
+* **SRP (단일 책임 원칙)**: 1,800라인의 거대 단일 컴포넌트(God Component)를 **240라인의 경량 오케스트레이터**와 4대 전담 서비스 계층(`GeminiService`, `SpeechService`, `DictionaryService`, `StorageService`) 및 모달 컴포넌트로 분리.
+* **OCP (개방-폐쇄 원칙) & LSP (리스코프 치환 원칙)**: 8대 학습 모드를 독립 컴포넌트(`src/components/modes/`)로 모듈화하고 공통 인터페이스 `BaseStudyModeProps`를 준수하도록 설계하여 새로운 학습 모드를 플러그인 형태로 무한 확장 가능하게 구축.
+* **ISP (인터페이스 분리 원칙)**: `types/index.ts`에 역할별로 명확히 분리된 인터페이스 정의.
+* **DIP (의존 역전 원칙)**: UI가 구체적인 REST API 엔드포인트에 직접 결합되지 않고 추상화된 서비스 레이어를 호출하도록 구조 역전.
+
 ---
 
-## 🏛️ 3. 시스템 아키텍처 다이어그램
+## 🏛️ 3. SOLID 클린 아키텍처 구조도
 
 ```mermaid
 flowchart TB
-    subgraph Teacher_PC ["🖥️ 교사 로컬 PC (콘텐츠 제작)"]
-        A[음원 / 유튜브 영상] --> B[Whisper STT 음성인식]
-        B --> C[Local Python Backend]
-        C --> D[클라우드 동기화 엔진]
+    subgraph UI_Layer ["🎨 UI 프레젠테이션 계층 (React Components)"]
+        WP[WebPlayer.tsx - 240라인 경량 오케스트레이터]
+        WP --> MODES[8대 독립 학습 모드 컴포넌트]
+        WP --> MODALS[독립 팝업 모달 컴포넌트]
+        
+        subgraph MODES ["📂 src/components/modes/ (OCP / LSP)"]
+            M1[VideoMode]
+            M2[IBInquiryMode]
+            M3[DictationMode]
+            M4[ClozeMode]
+            M5[ShadowingMode]
+            M6[SlideMode]
+            M7[VocabMode]
+            M8[IdiomMode]
+        end
+
+        subgraph MODALS ["📂 src/components/modals/ (SRP)"]
+            MD1[ApiKeyModal]
+            MD2[DictionaryModal]
+            MD3[ResultModal]
+        end
     end
 
-    subgraph Supabase_Cloud ["☁️ Supabase Cloud (0원 완전 무료 티어)"]
-        D -->|미디어 업로드| E[(Storage: voicetype-audio)]
-        D -->|메타데이터 동기화| F[(PostgreSQL: Classes / Students / Records)]
+    subgraph Service_Layer ["⚙️ 비즈니스 로직 & 외부 서비스 계층 (DIP / SRP)"]
+        GS[GeminiService: AI 모델 Fallback & 소크라테스 프롬프트]
+        SS[SpeechService: TTS 원어민 발음 & STT 채점]
+        DS[DictionaryService: Free Dictionary API & 어원 데이터]
+        ST[StorageService: Supabase 과제 제출 & 로컬 키 관리]
     end
 
-    subgraph Vercel_Deployment ["⚡ Vercel Serverless Hosting"]
-        G[Web Player & Teacher LMS SPA]
+    subgraph External_APIs ["☁️ 외부 클라우드 인프라 (0원 무료 티어)"]
+        E1[Google AI Studio Gemini Flash]
+        E2[Web Speech Synthesis / Recognition API]
+        E3[Supabase Cloud DB & Storage]
+        E4[Google Images / Naver / Cambridge Dict]
     end
 
-    subgraph Student_Client ["📱 학생 디바이스 (스마트폰 / 태블릿 / PC)"]
-        H[학생 로그인: 반 / 번호 선택] --> I[8대 멀티 학습 모드]
-        I -->|Gemini API 호출| J[🤖 Google AI Studio Gemini Flash]
-        J -->|실시간 피드백| I
-        I -->|과제 및 IB 에세이 제출| F
-        I -->|이미지/사전 검색| M[🖼️ Google Images & Naver & Cambridge]
-    end
+    WP --> Service_Layer
+    MODES --> Service_Layer
+    MODALS --> Service_Layer
 
-    subgraph Teacher_Client ["👩‍🏫 교사 대시보드"]
-        K[교사용 실시간 LMS] <-->|명단 수정 / 성적 조회| F
-        K -->|CSV 다운로드| L[성적표 엑셀 파일]
-    end
-
-    G --> Student_Client
-    G --> Teacher_Client
-    E -->|오디오/비디오 스트리밍| Student_Client
+    GS --> E1
+    SS --> E2
+    ST --> E3
+    DS --> E4
 ```
 
 ---
 
-## 🧠 4. IB 소크라테스 AI 코칭 프레임워크 상세
+## 📂 4. 리팩토링 후 최종 디렉토리 구조
+
+```
+web_player/src/
+├── services/                     # [DIP/SRP] 순수 비즈니스 로직 및 외부 통신 전담 계층
+│   ├── geminiService.ts          # Gemini 모델 Fallback & 소크라테스 산파 프롬프트 처리
+│   ├── speechService.ts          # Web Speech STT 발음평가 & TTS 원어민 발음 재생
+│   ├── dictionaryService.ts      # Free Dictionary API & 단어 데이터 가공
+│   └── storageService.ts         # Supabase 과제 제출 및 로컬스토리지 관리
+├── components/
+│   ├── modes/                    # [SRP/OCP/LSP] 독립된 8대 학습 모드 컴포넌트
+│   │   ├── VideoMode.tsx         # 비디오 & 싱크 자막
+│   │   ├── IBInquiryMode.tsx     # IB 3단계 소크라테스 산파관
+│   │   ├── DictationMode.tsx     # 풀 받아쓰기
+│   │   ├── ClozeMode.tsx         # 빈칸 채우기
+│   │   ├── ShadowingMode.tsx     # 섀도잉 & 마이크 발음평가
+│   │   ├── SlideMode.tsx         # 슬라이드 강의
+│   │   ├── VocabMode.tsx         # 스마트 단어장
+│   │   └── IdiomMode.tsx         # 핵심 숙어/이디엄
+│   ├── modals/                   # [SRP] 독립 모달 컴포넌트
+│   │   ├── ApiKeyModal.tsx       # Gemini API 키 등록 & 실시간 테스터 팝업
+│   │   ├── DictionaryModal.tsx   # 심층 영한/영영사전 & 구글 이미지 검색 팝업
+│   │   └── ResultModal.tsx       # 과제 제출 완료 축하 팝업
+│   ├── WebPlayer.tsx             # [Orchestrator] 순수 상태 조율자 (240라인)
+│   ├── TeacherLMS.tsx            # 교사용 LMS 관리기
+│   └── StudentAuth.tsx           # 학생 반응형 로그인 뷰
+└── types/
+    └── index.ts                  # [ISP] 역할별로 세분화된 클린 인터페이스 계약
+```
+
+---
+
+## 🧠 5. IB 소크라테스 AI 코칭 프레임워크 상세
 
 | 단계 | 철학적/학습적 기법 | 질문의 목적 및 학생 사고 유도 방향 |
 | :--- | :--- | :--- |
@@ -115,7 +168,7 @@ flowchart TB
 
 ---
 
-## 📖 5. 스마트 인터랙티브 사전 시스템 상세
+## 📖 6. 스마트 인터랙티브 사전 시스템 상세
 
 | 기능 | 세부 설명 및 사용자 경험 |
 | :--- | :--- |
@@ -128,7 +181,7 @@ flowchart TB
 
 ---
 
-## 📊 6. 데이터베이스 구조 (Supabase Schema)
+## 📊 7. 데이터베이스 구조 (Supabase Schema)
 
 ```sql
 -- 1. 학급 정보 (10개 반)
@@ -177,14 +230,16 @@ CREATE TABLE learning_records (
 
 ---
 
-## 🏆 7. 플랫폼 핵심 특장점 및 교육적 기대효과
+## 🏆 8. 플랫폼 핵심 특장점 및 교육적 기대효과
 
 1. **비용 0원(Free Tier)의 완벽한 확장성**:
    * 서버 호스팅 비용(Vercel $0) + 데이터베이스 비용(Supabase $0) + AI API 비용(Google AI Studio $0) = **월 0원으로 수백 명 학생 동시 교육 가능**.
-2. **교사 업무 생산성 극대화**:
+2. **SOLID 클린 아키텍처 기반의 높은 유지보수성**:
+   * 기능별 책임이 완벽히 분리되어 있어, 코드 수정 및 신규 모드 확장이 안전하고 빠름.
+3. **교사 업무 생산성 극대화**:
    * 영상/음원 파일 하나만 넣으면 Whisper AI가 자막 추출 ➔ 단어장 생성 ➔ 슬라이드 강의 제작 ➔ IB 질문 생성까지 전자동 완료.
    * 학생 명단 엑셀 일괄 복사/붙여넣기 및 성적표 CSV 원클릭 추출.
-3. **단순 암기를 뛰어넘는 비판적 사고력 & 시각적 어휘력 함양**:
+4. **단순 암기를 뛰어넘는 비판적 사고력 & 시각적 어휘력 함양**:
    * 받아쓰기(Dictation)와 발음(Shadowing)으로 기초 영어를 다지고,
    * 구글 이미지 검색과 스마트 사전으로 어휘를 시각적으로 기억하며,
    * 소크라테스 산파법 AI 코칭으로 깊이 있는 철학적 에세이와 비판적 사고력을 동시에 체득.

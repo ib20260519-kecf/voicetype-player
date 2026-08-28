@@ -224,6 +224,8 @@ export const WebPlayer: React.FC<WebPlayerProps> = ({ lesson, student, onBack })
             onJumpToSegment={jumpToSegment}
             videoRef={videoRef}
             setIsPlaying={setIsPlaying}
+            isPlaying={isPlaying}
+            onTogglePlay={togglePlay}
           />
         )}
 

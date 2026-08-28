@@ -11,7 +11,7 @@
 
 | 구분 | 접속 URL / 링크 | 주요 기능 및 용도 |
 | :--- | :--- | :--- |
-| **🎧 학생용 웹 플레이어** | [https://voicetype-player.vercel.app/](https://voicetype-player.vercel.app/) | 8대 멀티 학습 모드, 실시간 AI 소크라테스 산파 코칭, 스마트 사전, 과제 제출 |
+| **🎧 학생용 웹 플레이어** | [https://voicetype-player.vercel.app/](https://voicetype-player.vercel.app/) | 8대 멀티 학습 모드, 스마트 비주얼 스토리보드, 실시간 AI 소크라테스 산파 코칭, 스마트 사전 |
 | **📊 교사용 실시간 LMS** | [https://voicetype-player.vercel.app/?mode=teacher](https://voicetype-player.vercel.app/?mode=teacher) | 10개 반 300명 명단 편집, 엑셀 일괄 등록, 실시간 성적표 & CSV 다운로드, IB 서술 답변 열람 |
 | **💻 GitHub 레포지토리** | [https://github.com/ib20260519-kecf/voicetype-player](https://github.com/ib20260519-kecf/voicetype-player) | React + TypeScript + Vite + TailwindCSS 오픈소스 코드베이스 |
 | **🗄️ Supabase Cloud DB** | `https://ujeiikjjjuygadhjvwop.supabase.co` | PostgreSQL 데이터베이스, RLS 보안 정책, 미디어 스토리지 |
@@ -34,9 +34,13 @@
 * **샘플 학급 등록**: 사용자 요청에 따라 **날개반 (1번 신온유, 2번 신하온)** 기본 데이터 셋팅.
 * **📋 엑셀 명단 일괄 붙여넣기**: 30명 명단을 복사해 붙여넣으면 번호별로 자동 파싱되어 1초 만에 폼 입력.
 * **📥 한글 깨짐 없는 CSV 성적표 다운로드**: UTF-8 with BOM 인코딩 적용으로 엑셀에서 바로 열리는 성적표 내보내기 지원.
+* **🎯 10개 반 중 선택 배포(Selective Class Deployment)**: 레슨 제작 완료 모달에서 10개 반 체크박스([전체 선택] 또는 [1반(날개반)], [2반] 등 개별 선택)를 통해 원하는 반에만 타겟 배포 지원.
+* **👩‍🏫 메인 헤더 LMS 바로가기**: 로컬 웹 상단 우측에 교사용 LMS로 1초 만에 이동하는 원클릭 링크 버튼 탑재.
 
 ### 📌 Phase 4: 8대 종합 멀티 학습 모드 탑재
-1. 🎬 **비디오/영상 시청**: 고화질 MP4 비디오 플레이어 + 타임라인 자막 스크립트 클릭 점프
+1. 🎬 **비디오/영상 시청 & 스마트 비주얼 스토리보드**:
+   - 고화질 MP4 비디오 플레이어 지원
+   - **MP3 전용 스마트 비주얼 스토리보드 (신규)**: 영상이 없는 음원도 상황별 고화질 사진(Ken Burns 줌인) + 네온 오디오 이퀄라이저 파형으로 영화처럼 시각화!
 2. 🧠 **IB 심층 탐구 질문 (Inquiry & Critical Thinking)**: Factual / Conceptual / Debatable 3단계 에세이 서술관
 3. 🎧 **풀 받아쓰기 (Full Dictation)**: 실시간 문장 타이핑 & 정확도(%) 채점
 4. 🧩 **빈칸 채우기 (Cloze Test)**: 첫 글자 힌트 기반 빈칸 완성 훈련
@@ -64,7 +68,7 @@
   3. ⚡ **SCAMPER 발상 전환**: 규칙을 뒤집거나 대체하는 창의적 질문
 * **대화형 문답 인터랙션**: 학생이 후속 질문에 대해 생각을 이어 타이핑하고 교사 LMS로 최종 제출.
 
-### 📌 Phase 7: SOLID 원칙 기반 엔터프라이즈급 클린 아키텍처 확립 (신규 완료)
+### 📌 Phase 7: SOLID 원칙 기반 엔터프라이즈급 클린 아키텍처 확립
 * **SRP (단일 책임 원칙)**: 1,800라인의 거대 단일 컴포넌트(God Component)를 **240라인의 경량 오케스트레이터**와 4대 전담 서비스 계층(`GeminiService`, `SpeechService`, `DictionaryService`, `StorageService`) 및 모달 컴포넌트로 분리.
 * **OCP (개방-폐쇄 원칙) & LSP (리스코프 치환 원칙)**: 8대 학습 모드를 독립 컴포넌트(`src/components/modes/`)로 모듈화하고 공통 인터페이스 `BaseStudyModeProps`를 준수하도록 설계하여 새로운 학습 모드를 플러그인 형태로 무한 확장 가능하게 구축.
 * **ISP (인터페이스 분리 원칙)**: `types/index.ts`에 역할별로 명확히 분리된 인터페이스 정의.
@@ -82,14 +86,14 @@ flowchart TB
         WP --> MODALS[독립 팝업 모달 컴포넌트]
         
         subgraph MODES ["📂 src/components/modes/ (OCP / LSP)"]
-            M1[VideoMode]
-            M2[IBInquiryMode]
-            M3[DictationMode]
-            M4[ClozeMode]
-            M5[ShadowingMode]
-            M6[SlideMode]
-            M7[VocabMode]
-            M8[IdiomMode]
+            M1[VideoMode: 비디오 & 스마트 비주얼 스토리보드]
+            M2[IBInquiryMode: 소크라테스 3단계 탐구관]
+            M3[DictationMode: 풀 받아쓰기]
+            M4[ClozeMode: 빈칸 채우기]
+            M5[ShadowingMode: 마이크 발음평가]
+            M6[SlideMode: AI 슬라이드 강의]
+            M7[VocabMode: 스마트 사전 & 구글 이미지]
+            M8[IdiomMode: 핵심 숙어/이디엄]
         end
 
         subgraph MODALS ["📂 src/components/modals/ (SRP)"]
@@ -125,35 +129,27 @@ flowchart TB
 
 ---
 
-## 📂 4. 리팩토링 후 최종 디렉토리 구조
+## 🎨 4. MP3 오디오 전용 스마트 비주얼 스토리보드 시스템
 
+```text
+┌────────────────────────────────────────────────────────────┐
+│ 🎧 스마트 오디오 스토리보드                [🖼️ 배경 켜기/끄기] │
+│                                                            │
+│       [ 호텔/공항/대화 상황 고화질 사진 (부드러운 줌인) ]   │
+│                                                            │
+│     ┌────────────────────────────────────────────────┐     │
+│     │ Sentence 1 of 12                               │     │
+│     │ "Could I have your name, please?"              │     │
+│     └────────────────────────────────────────────────┘     │
+│                                                            │
+│  ılılılllıılı (실시간 네온 오디오 이퀄라이저 파형)  00:15~00:18s │
+└────────────────────────────────────────────────────────────┘
 ```
-web_player/src/
-├── services/                     # [DIP/SRP] 순수 비즈니스 로직 및 외부 통신 전담 계층
-│   ├── geminiService.ts          # Gemini 모델 Fallback & 소크라테스 산파 프롬프트 처리
-│   ├── speechService.ts          # Web Speech STT 발음평가 & TTS 원어민 발음 재생
-│   ├── dictionaryService.ts      # Free Dictionary API & 단어 데이터 가공
-│   └── storageService.ts         # Supabase 과제 제출 및 로컬스토리지 관리
-├── components/
-│   ├── modes/                    # [SRP/OCP/LSP] 독립된 8대 학습 모드 컴포넌트
-│   │   ├── VideoMode.tsx         # 비디오 & 싱크 자막
-│   │   ├── IBInquiryMode.tsx     # IB 3단계 소크라테스 산파관
-│   │   ├── DictationMode.tsx     # 풀 받아쓰기
-│   │   ├── ClozeMode.tsx         # 빈칸 채우기
-│   │   ├── ShadowingMode.tsx     # 섀도잉 & 마이크 발음평가
-│   │   ├── SlideMode.tsx         # 슬라이드 강의
-│   │   ├── VocabMode.tsx         # 스마트 단어장
-│   │   └── IdiomMode.tsx         # 핵심 숙어/이디엄
-│   ├── modals/                   # [SRP] 독립 모달 컴포넌트
-│   │   ├── ApiKeyModal.tsx       # Gemini API 키 등록 & 실시간 테스터 팝업
-│   │   ├── DictionaryModal.tsx   # 심층 영한/영영사전 & 구글 이미지 검색 팝업
-│   │   └── ResultModal.tsx       # 과제 제출 완료 축하 팝업
-│   ├── WebPlayer.tsx             # [Orchestrator] 순수 상태 조율자 (240라인)
-│   ├── TeacherLMS.tsx            # 교사용 LMS 관리기
-│   └── StudentAuth.tsx           # 학생 반응형 로그인 뷰
-└── types/
-    └── index.ts                  # [ISP] 역할별로 세분화된 클린 인터페이스 계약
-```
+
+* **동적 상황 일러스트 전환 (Ken Burns Zoom)**: 음원의 대화 상황(공항, 호텔, 비즈니스, 학교 등)에 맞는 고품질 사진이 오디오 진행도에 따라 서서히 줌인되며 크로스페이드.
+* **글래스모피즘 포커스 자막 카드**: 어두운 오버레이 배경 위에 현재 화자의 핵심 대사가 시원한 카드로 강조되어 리스닝 몰입감 200% 상승.
+* **네온 오디오 이퀄라이저 파형**: 소리가 재생될 때 12채널 네온 파형이 살아 숨쉬듯 반응.
+* **배경 ON/OFF 토글**: 학생의 필요에 따라 언제든지 배경 이미지를 켜고 끌 수 있음.
 
 ---
 
@@ -238,8 +234,11 @@ CREATE TABLE learning_records (
    * 기능별 책임이 완벽히 분리되어 있어, 코드 수정 및 신규 모드 확장이 안전하고 빠름.
 3. **교사 업무 생산성 극대화**:
    * 영상/음원 파일 하나만 넣으면 Whisper AI가 자막 추출 ➔ 단어장 생성 ➔ 슬라이드 강의 제작 ➔ IB 질문 생성까지 전자동 완료.
+   * **10개 반 중 원하는 특정 반만 콕 집어 원클릭 타겟 배포 지원**.
    * 학생 명단 엑셀 일괄 복사/붙여넣기 및 성적표 CSV 원클릭 추출.
-4. **단순 암기를 뛰어넘는 비판적 사고력 & 시각적 어휘력 함양**:
+4. **MP3 음원도 생생한 비주얼 스토리보드로 시각화**:
+   * 영상이 없는 오디오 레슨도 상황별 일러스트와 네온 이퀄라이저 파형을 통해 지루함 없는 몰입형 학습 환경 제공.
+5. **단순 암기를 뛰어넘는 비판적 사고력 & 시각적 어휘력 함양**:
    * 받아쓰기(Dictation)와 발음(Shadowing)으로 기초 영어를 다지고,
    * 구글 이미지 검색과 스마트 사전으로 어휘를 시각적으로 기억하며,
    * 소크라테스 산파법 AI 코칭으로 깊이 있는 철학적 에세이와 비판적 사고력을 동시에 체득.

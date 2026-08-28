@@ -11,20 +11,20 @@ export const StudentAuth: React.FC<StudentAuthProps> = ({ onLoginSuccess, onOpen
   const [classes, setClasses] = useState<ClassInfo[]>([]);
   const [selectedClassId, setSelectedClassId] = useState<string>('class_01');
   const [studentNo, setStudentNo] = useState<number>(1);
+  const [classStudents, setClassStudents] = useState<Record<number, StudentInfo>>({});
   const [studentName, setStudentName] = useState<string>('');
-  const [passcode, setPasscode] = useState<string>('1234');
   const [loading, setLoading] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string>('');
 
-  // 10개 기본 반 목록 (DB 연동 전 기본값)
+  // 10개 기본 반 목록
   const defaultClasses: ClassInfo[] = Array.from({ length: 10 }, (_, i) => ({
     id: `class_${String(i + 1).padStart(2, '0')}`,
     name: `${i + 1}반 (Class ${i + 1})`,
     teacher_name: 'Teacher'
   }));
 
+  // 1. Fetch Classes on mount
   useEffect(() => {
-    // Supabase에서 실제 반 목록 불러오기 시도
     if (supabase) {
       supabase.from('classes').select('*').order('id')
         .then(({ data, error }) => {
@@ -40,6 +40,39 @@ export const StudentAuth: React.FC<StudentAuthProps> = ({ onLoginSuccess, onOpen
     }
   }, []);
 
+  // 2. Fetch Students for the selected class
+  useEffect(() => {
+    if (!supabase || !selectedClassId) return;
+
+    supabase
+      .from('students')
+      .select('*')
+      .eq('class_id', selectedClassId)
+      .then(({ data, error }) => {
+        if (!error && data) {
+          const map: Record<number, StudentInfo> = {};
+          data.forEach(s => { map[s.student_no] = s; });
+          setClassStudents(map);
+          
+          // Auto-fill student name if already registered
+          if (map[studentNo]) {
+            setStudentName(map[studentNo].name);
+          }
+        }
+      });
+  }, [selectedClassId]);
+
+  // Update name when studentNo changes
+  useEffect(() => {
+    if (classStudents[studentNo]) {
+      setStudentName(classStudents[studentNo].name);
+    } else {
+      const currentClass = classes.find(c => c.id === selectedClassId);
+      const className = currentClass ? currentClass.name : '학급';
+      setStudentName(`${className} ${studentNo}번 학생`);
+    }
+  }, [studentNo, classStudents]);
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
@@ -49,7 +82,13 @@ export const StudentAuth: React.FC<StudentAuthProps> = ({ onLoginSuccess, onOpen
 
     try {
       if (supabase) {
-        // Supabase에서 학생 정보 확인 또는 자동 로그인
+        // Find or upsert student in Supabase
+        const existing = classStudents[studentNo];
+        if (existing) {
+          onLoginSuccess(existing, currentClass);
+          return;
+        }
+
         const { data, error } = await supabase
           .from('students')
           .select('*')
@@ -63,22 +102,24 @@ export const StudentAuth: React.FC<StudentAuthProps> = ({ onLoginSuccess, onOpen
         }
       }
 
-      // 오프라인/데모 모드 학생 생성
-      const demoStudent: StudentInfo = {
+      // Offline / fallback student
+      const fallbackStudent: StudentInfo = {
         id: `student_${selectedClassId}_${studentNo}`,
         class_id: selectedClassId,
         student_no: Number(studentNo),
         name: studentName.trim() || `${currentClass.name} ${studentNo}번`,
-        passcode: passcode
+        passcode: '1234'
       };
 
-      onLoginSuccess(demoStudent, currentClass);
+      onLoginSuccess(fallbackStudent, currentClass);
     } catch (err: any) {
       setErrorMsg(err.message || '로그인 중 오류가 발생했습니다.');
     } finally {
       setLoading(false);
     }
   };
+
+  const currentClassObj = classes.find(c => c.id === selectedClassId) || defaultClasses[0];
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-slate-950 via-indigo-950 to-slate-950">
@@ -92,7 +133,7 @@ export const StudentAuth: React.FC<StudentAuthProps> = ({ onLoginSuccess, onOpen
             VoiceType 학생 학습관
           </h1>
           <p className="text-xs text-slate-400">
-            반과 번호를 선택하고 받아쓰기 과제를 시작하세요.
+            나의 반과 출석번호를 선택하고 과제를 시작하세요.
           </p>
         </div>
 
@@ -107,7 +148,7 @@ export const StudentAuth: React.FC<StudentAuthProps> = ({ onLoginSuccess, onOpen
               className="w-full bg-slate-800/80 border border-slate-700 rounded-2xl px-4 py-3 text-sm text-white font-bold outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
             >
               {classes.map(c => (
-                <option key={c.id} value={c.id} className="bg-slate-900 text-white">
+                <option key={c.id} value={c.id} className="bg-slate-900 text-white font-bold">
                   {c.name}
                 </option>
               ))}
@@ -116,35 +157,38 @@ export const StudentAuth: React.FC<StudentAuthProps> = ({ onLoginSuccess, onOpen
 
           {/* Student No (1~30) */}
           <div className="space-y-1.5">
-            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">출석번호 (1~30번)</label>
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">출석번호 선택 (1~30번)</label>
+              <span className="text-[11px] text-indigo-400 font-bold">현재 선택: {studentNo}번</span>
+            </div>
             <div className="grid grid-cols-6 gap-1.5 max-h-36 overflow-y-auto p-2 bg-slate-950/60 rounded-2xl border border-slate-800">
-              {Array.from({ length: 30 }, (_, i) => i + 1).map(num => (
-                <button
-                  type="button"
-                  key={num}
-                  onClick={() => setStudentNo(num)}
-                  className={`py-2 rounded-xl text-xs font-black transition-all cursor-pointer ${
-                    studentNo === num
-                      ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/40 scale-105'
-                      : 'bg-slate-800/60 text-slate-400 hover:bg-slate-700 hover:text-white'
-                  }`}
-                >
-                  {num}번
-                </button>
-              ))}
+              {Array.from({ length: 30 }, (_, i) => i + 1).map(num => {
+                const registeredName = classStudents[num]?.name;
+                return (
+                  <button
+                    type="button"
+                    key={num}
+                    onClick={() => setStudentNo(num)}
+                    title={registeredName || `${num}번`}
+                    className={`py-2 rounded-xl text-xs font-black transition-all cursor-pointer truncate px-1 ${
+                      studentNo === num
+                        ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/40 scale-105'
+                        : 'bg-slate-800/60 text-slate-400 hover:bg-slate-700 hover:text-white'
+                    }`}
+                  >
+                    {num}번
+                  </button>
+                );
+              })}
             </div>
           </div>
 
-          {/* Student Name */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">학생 이름 (선택)</label>
-            <input
-              type="text"
-              placeholder="예: 홍길동"
-              value={studentName}
-              onChange={e => setStudentName(e.target.value)}
-              className="w-full bg-slate-800/80 border border-slate-700 rounded-2xl px-4 py-3 text-sm text-white outline-none focus:ring-2 focus:ring-indigo-500"
-            />
+          {/* Student Welcome Banner / Name Check */}
+          <div className="p-3.5 bg-indigo-950/40 border border-indigo-900/60 rounded-2xl space-y-1">
+            <p className="text-[11px] font-bold text-indigo-400">👋 학생 확인</p>
+            <p className="text-base font-black text-white">
+              {studentName || `${currentClassObj.name} ${studentNo}번`}
+            </p>
           </div>
 
           {errorMsg && (

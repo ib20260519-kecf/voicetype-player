@@ -10,12 +10,22 @@ interface WebPlayerProps {
 
 type StudyMode = 'video' | 'dictation' | 'cloze' | 'shadowing' | 'slides' | 'vocab' | 'idioms' | 'ib_inquiry';
 
+interface SocraticFollowUp {
+  step: number;
+  type: 'socratic' | 'feynman' | 'scamper';
+  title: string;
+  question_ko: string;
+  question_en: string;
+  prompt_ko: string;
+}
+
 interface AIFeedbackResult {
   rubric: string;
   strengths_ko: string;
-  feedback_ko: string;
+  konglish_warm_tip_ko: string;
   polished_en: string;
   advanced_model_en: string;
+  socratic_followups: SocraticFollowUp[];
 }
 
 export const WebPlayer: React.FC<WebPlayerProps> = ({ lesson, student, onBack }) => {
@@ -51,7 +61,7 @@ export const WebPlayer: React.FC<WebPlayerProps> = ({ lesson, student, onBack })
   const [speechScores, setSpeechScores] = useState<Record<number, number>>({});
   const recognitionRef = useRef<any>(null);
 
-  // 4. Vocab Flashcard & Quiz State
+  // 4. Vocab Flashcard State
   const vocabList = lesson.key_vocabulary || [
     { word: 'smart', meaning_ko: '현명한, 똑똑한', example: 'Smart shopping saves money.' },
     { word: 'jacket', meaning_ko: '재킷, 상의', example: 'Can you check the price of this jacket?' },
@@ -84,7 +94,7 @@ export const WebPlayer: React.FC<WebPlayerProps> = ({ lesson, student, onBack })
     }
   ];
 
-  // 6. IB Inquiry Questions & Gemini AI State
+  // 6. IB Inquiry Questions & Socratic AI State
   const defaultIBQuestions: IBQuestion[] = [
     {
       type: 'factual',
@@ -122,6 +132,9 @@ export const WebPlayer: React.FC<WebPlayerProps> = ({ lesson, student, onBack })
   const [tempApiKey, setTempApiKey] = useState<string>(localStorage.getItem('vt_gemini_api_key') || '');
   const [aiFeedbacks, setAiFeedbacks] = useState<Record<number, AIFeedbackResult>>({});
   const [isGeneratingAI, setIsGeneratingAI] = useState<Record<number, boolean>>({});
+
+  // Follow-up Inquiry Responses (Multi-turn answers from student)
+  const [followUpAnswers, setFollowUpAnswers] = useState<Record<string, string>>({});
 
   // Submission State
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
@@ -261,11 +274,11 @@ export const WebPlayer: React.FC<WebPlayerProps> = ({ lesson, student, onBack })
     }
   };
 
-  // Gemini AI Feedback Request
+  // Gemini AI Feedback Request (With Socratic, Feynman, SCAMPER Framework)
   const handleRequestAIFeedback = async (qIdx: number) => {
     const studentAnswer = (ibAnswers[qIdx] || '').trim();
     if (!studentAnswer) {
-      alert('먼저 질문에 대한 당신의 생각/답변을 작성해 주세요!');
+      alert('먼저 질문에 대한 당신의 생각/답변을 작성해 주세요! (콩글리시나 단문이어도 괜찮습니다)');
       return;
     }
 
@@ -279,22 +292,52 @@ export const WebPlayer: React.FC<WebPlayerProps> = ({ lesson, student, onBack })
 
     try {
       const prompt = `
-You are an inspiring, expert IB English & Critical Thinking Inquiry Coach.
-Analyze the following student's response to an IB inquiry question based on the learning material.
+You are a warm, encouraging, and world-class IB English & Philosophy Inquiry Coach.
+The student might submit imperfect English, Konglish (Korean-style English), or short simple sentences.
+YOUR PRIORITY is to VALIDATE the student's core idea first, gently polish their English expression, and then trigger DEEP CRITICAL THINKING through a 3-Stage Questioning Framework:
+1. 🏛️ Socratic Clarification (소크라테스 산파법 반문)
+2. 🧠 Feynman Simplification (파인만 학습법: 쉬운 비유로 설명하기)
+3. ⚡ SCAMPER Perspective Shift (SCAMPER 발상 전환 질문)
 
-[Lesson Title]: "${lesson.title}"
-[Question Type]: IB ${question.type.toUpperCase()} Question
-[English Question]: "${question.question_en}"
-[Korean Question]: "${question.question_ko}"
-[Student Answer]: "${studentAnswer}"
+[Context]:
+- Lesson Title: "${lesson.title}"
+- Question Type: IB ${question.type.toUpperCase()}
+- IB Main Question: "${question.question_en}" (${question.question_ko})
+- Student's Answer: "${studentAnswer}"
 
-Please analyze and provide feedback in JSON format ONLY:
+Please analyze and generate response in STRICT JSON format:
 {
-  "rubric": "IB Criterion evaluation grade (e.g., 'Criterion A: Excellent (Level 7/8)' or 'Criterion B: Good (Level 5/6)')",
-  "strengths_ko": "학생의 논리와 생각에서 칭찬할 점 (친절하고 격려하는 한국어 1~2문장)",
-  "feedback_ko": "더 깊은 IB 탐구를 위해 보완할 점과 심층 조언 (한국어 2문장)",
-  "polished_en": "원어민 수준으로 자연스럽고 명확하게 교정된 세련된 영어 문장",
-  "advanced_model_en": "학생의 생각을 한 단계 더 심화시킨 고득점 IB 모범 에세이 답변 (영어 2~3문장)"
+  "rubric": "IB Criterion evaluation grade (e.g. 'Criterion A/B: Excellent Idea (Level 7/8)')",
+  "strengths_ko": "학생의 생각에서 가장 칭찬할 점 (콩글리시여도 아이디어를 적극 칭찬하는 한국어 1~2문장)",
+  "konglish_warm_tip_ko": "따뜻한 표현 코칭 (학생이 쓴 서툰 표현을 어떻게 세련되게 바꿀 수 있는지 친절한 한국어 팁 1문장)",
+  "polished_en": "원어민 수준의 자연스럽고 명확한 영어 교정 문장",
+  "advanced_model_en": "학생의 아이디어를 한 단계 더 심화시킨 고득점 IB 모범 에세이 문장",
+  "socratic_followups": [
+    {
+      "step": 1,
+      "type": "socratic",
+      "title": "🏛️ 1단계 [소크라테스 산파법]: 전제와 반대 상황 탐구",
+      "question_en": "A probing English question challenging the assumptions or exploring edge cases of student's answer.",
+      "question_ko": "학생의 주장에 대해 반대 상황이나 숨은 전제를 짚어주는 한국어 질문",
+      "prompt_ko": "만약 ~한 상황이라면 당신의 선택은 어떻게 달라질까요?"
+    },
+    {
+      "step": 2,
+      "type": "feynman",
+      "title": "🧠 2단계 [파인만 학습법]: 일상 속 쉬운 비유로 설명하기",
+      "question_en": "An English question asking to explain this concept using a simple everyday analogy to a young child.",
+      "question_ko": "이 개념을 어린 동생이나 친구에게 가장 알기 쉬운 일상 비유로 설명해 보라는 한국어 질문",
+      "prompt_ko": "내가 일상에서 겪은 경험이나 쉬운 물건에 빗대어 설명해 보세요."
+    },
+    {
+      "step": 3,
+      "type": "scamper",
+      "title": "⚡ 3단계 [SCAMPER 발상 전환]: 규칙을 뒤집거나 대체하기",
+      "question_en": "A creative SCAMPER question (Substitute, Combine, Reverse, or Modify) transforming the whole scenario.",
+      "question_ko": "기존 상식이나 규칙을 완전히 뒤집어 새로운 관점을 모색하는 창의적 한국어 질문",
+      "prompt_ko": "만약 상점에서 가격표를 아예 없애고 소비자가 가치를 매긴다면 어떻게 될까요?"
+    }
+  ]
 }
 `;
 
@@ -359,6 +402,12 @@ Please analyze and provide feedback in JSON format ONLY:
 
     const averageAccuracy = totalSegments > 0 ? Math.round(totalScore / totalSegments) : 100;
 
+    // Combine primary IB answers with 3-stage follow-up thoughts
+    const combinedIBRecords: Record<string, any> = { ...ibAnswers };
+    Object.entries(followUpAnswers).forEach(([k, v]) => {
+      combinedIBRecords[`followup_${k}`] = v;
+    });
+
     try {
       if (supabase) {
         await supabase.from('learning_records').upsert({
@@ -369,7 +418,7 @@ Please analyze and provide feedback in JSON format ONLY:
           completed: true,
           time_spent_sec: Math.round(currentTime),
           wrong_words: wrongWords,
-          ib_answers: ibAnswers,
+          ib_answers: combinedIBRecords,
           completed_at: new Date().toISOString()
         }, { onConflict: 'student_id,lesson_id' });
       }
@@ -431,7 +480,7 @@ Please analyze and provide feedback in JSON format ONLY:
         <div className="max-w-5xl mx-auto flex gap-1.5 overflow-x-auto pb-1">
           {[
             { id: 'video', name: '🎬 비디오/영상 시청' },
-            { id: 'ib_inquiry', name: '🧠 IB 심층 탐구 질문' },
+            { id: 'ib_inquiry', name: '🧠 IB 심층 탐구 & 소크라테스 문답' },
             { id: 'dictation', name: '🎧 풀 받아쓰기' },
             { id: 'cloze', name: '🧩 빈칸 채우기' },
             { id: 'shadowing', name: '🎙️ 섀도잉 & 발음평가' },
@@ -458,17 +507,17 @@ Please analyze and provide feedback in JSON format ONLY:
       <main className="max-w-4xl w-full mx-auto p-4 sm:p-6 flex-1 flex flex-col justify-center space-y-6">
 
         {/* ─────────────────────────────────────────────────────────────
-            MODE: IB Inquiry Questions & Live Gemini AI Feedback
+            MODE: IB Inquiry & Socratic Follow-up Dialogue
         ────────────────────────────────────────────────────────────── */}
         {currentMode === 'ib_inquiry' && (
           <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b border-slate-800 pb-4">
               <div>
                 <h3 className="text-lg font-black text-white flex items-center gap-2">
-                  <span>🧠</span> IB Inquiry & Gemini AI 첨삭관
+                  <span>🧠</span> IB 심층 탐구 & 소크라테스 3단계 생각 산파관
                 </h3>
                 <p className="text-xs text-slate-400 mt-1">
-                  생각을 영어로 작성하고 <strong>[✨ Gemini AI 첨삭]</strong>을 누르면 실시간 IB 루브릭 평가와 세련된 영어 교정을 즉시 제공합니다.
+                  서툰 영어(콩글리시)나 단문이어도 괜찮습니다! 생각을 작성하고 <strong>[✨ AI 코칭]</strong>을 받으면 소크라테스 산파법 3단계 꼬리물기 질문이 펼쳐집니다.
                 </p>
               </div>
               <button
@@ -491,7 +540,7 @@ Please analyze and provide feedback in JSON format ONLY:
                 const isLoadingAI = isGeneratingAI[idx];
 
                 return (
-                  <div key={idx} className="bg-slate-950 border border-slate-800 rounded-3xl p-5 sm:p-6 space-y-4 shadow-xl">
+                  <div key={idx} className="bg-slate-950 border border-slate-800 rounded-3xl p-5 sm:p-6 space-y-5 shadow-xl">
                     <div className="flex items-center justify-between">
                       <span className={`px-3 py-1 rounded-xl text-xs font-black border ${typeBadge.color}`}>
                         {typeBadge.label}
@@ -516,7 +565,7 @@ Please analyze and provide feedback in JSON format ONLY:
                     <div className="space-y-3">
                       <textarea
                         rows={3}
-                        placeholder="이 질문에 대한 당신의 생각과 답변을 영어(또는 한국어)로 서술하세요..."
+                        placeholder="이 질문에 대한 당신의 생각과 답변을 작성하세요... (콩글리시나 한글이 섞여도 AI가 완벽하게 다듬어줍니다!)"
                         value={ibAnswers[idx] || ''}
                         onChange={e => setIbAnswers(prev => ({ ...prev, [idx]: e.target.value }))}
                         className="w-full bg-slate-900 border border-slate-700 focus:border-purple-500 rounded-2xl p-4 text-xs sm:text-sm text-white font-medium outline-none leading-relaxed placeholder:text-slate-600 transition-colors"
@@ -528,9 +577,9 @@ Please analyze and provide feedback in JSON format ONLY:
                           type="button"
                           onClick={() => handleRequestAIFeedback(idx)}
                           disabled={isLoadingAI}
-                          className="px-4 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-xl text-xs font-black shadow-lg shadow-purple-600/30 transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                          className="px-5 py-3 bg-gradient-to-r from-purple-600 via-indigo-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white rounded-xl text-xs font-black shadow-lg shadow-purple-600/30 transition-all cursor-pointer flex items-center gap-2 disabled:opacity-50"
                         >
-                          {isLoadingAI ? '🤖 Gemini AI가 심층 분석 중...' : '✨ Gemini AI 실시간 첨삭 & 피드백 받기'}
+                          {isLoadingAI ? '🤖 소크라테스 AI가 사고를 분석 중...' : '✨ Gemini AI 코칭 & 3단계 산파 질문 받기'}
                         </button>
 
                         {q.sample_answer_en && (
@@ -544,7 +593,7 @@ Please analyze and provide feedback in JSON format ONLY:
                         )}
                       </div>
 
-                      {/* Default Sample Answer Box */}
+                      {/* Default Reference Answer */}
                       {showSampleAnswer[idx] && q.sample_answer_en && (
                         <div className="p-3.5 bg-slate-900 border border-slate-800 rounded-xl text-xs text-slate-300 space-y-1 animate-in fade-in">
                           <p className="font-bold text-slate-400">📖 교사 기본 예시 답안 (Reference):</p>
@@ -552,46 +601,99 @@ Please analyze and provide feedback in JSON format ONLY:
                         </div>
                       )}
 
-                      {/* 🌟 GEMINI AI LIVE FEEDBACK CARD */}
+                      {/* 🌟 SOCRATIC & FEYNMAN & SCAMPER AI FEEDBACK REPORT */}
                       {feedback && (
-                        <div className="bg-gradient-to-br from-purple-950/60 via-slate-900 to-indigo-950/60 border-2 border-purple-500/50 rounded-2xl p-5 space-y-4 shadow-2xl animate-in fade-in zoom-in-95">
+                        <div className="bg-gradient-to-br from-purple-950/70 via-slate-900 to-indigo-950/70 border-2 border-purple-500/50 rounded-2xl p-5 sm:p-6 space-y-5 shadow-2xl animate-in fade-in zoom-in-95">
+                          {/* Top Header Rubric */}
                           <div className="flex items-center justify-between border-b border-purple-800/60 pb-3">
                             <span className="text-xs font-black text-purple-300 flex items-center gap-1.5">
-                              <span>✨</span> Gemini AI 실시간 첨삭 리포트
+                              <span>✨</span> Gemini AI 탐구 코칭 & 표현 다듬기
                             </span>
                             <span className="px-2.5 py-0.5 bg-purple-500/20 text-purple-200 border border-purple-500/40 rounded-full text-[11px] font-black">
                               {feedback.rubric}
                             </span>
                           </div>
 
-                          {/* Strengths & Feedback */}
+                          {/* Warm Encouragement & Strengths */}
                           <div className="space-y-2 text-xs">
-                            <div className="p-3 bg-slate-950/80 rounded-xl border border-slate-800 space-y-1">
-                              <p className="font-black text-emerald-400">👏 훌륭한 점 (Strengths):</p>
+                            <div className="p-3.5 bg-slate-950/80 rounded-xl border border-slate-800 space-y-1">
+                              <p className="font-black text-emerald-400 flex items-center gap-1">
+                                <span>👏</span> 칭찬할 만한 핵심 생각:
+                              </p>
                               <p className="text-slate-200">{feedback.strengths_ko}</p>
                             </div>
 
-                            <div className="p-3 bg-slate-950/80 rounded-xl border border-slate-800 space-y-1">
-                              <p className="font-black text-indigo-400">💡 심층 탐구 조언 (Inquiry Feedback):</p>
-                              <p className="text-slate-200">{feedback.feedback_ko}</p>
-                            </div>
+                            {feedback.konglish_warm_tip_ko && (
+                              <div className="p-3.5 bg-slate-950/80 rounded-xl border border-slate-800 space-y-1">
+                                <p className="font-black text-amber-400 flex items-center gap-1">
+                                  <span>💡</span> 콩글리시 ➔ 세련된 영어 팁:
+                                </p>
+                                <p className="text-slate-200">{feedback.konglish_warm_tip_ko}</p>
+                              </div>
+                            )}
                           </div>
 
-                          {/* Polished English */}
-                          <div className="p-3.5 bg-purple-950/40 border border-purple-800/80 rounded-xl space-y-1">
-                            <p className="text-[11px] font-black text-purple-300">✍️ 원어민 표현 교정 (Polished Expression):</p>
+                          {/* Polished Expression */}
+                          <div className="p-4 bg-purple-950/50 border border-purple-800/80 rounded-2xl space-y-1.5">
+                            <p className="text-[11px] font-black text-purple-300">✍️ 원어민 표현으로 다듬은 문장 (Polished English):</p>
                             <p className="text-xs sm:text-sm font-bold text-white leading-relaxed">
                               "{feedback.polished_en}"
                             </p>
                           </div>
 
                           {/* Advanced Model Essay */}
-                          <div className="p-3.5 bg-indigo-950/40 border border-indigo-800/80 rounded-xl space-y-1">
-                            <p className="text-[11px] font-black text-indigo-300">🏆 발전된 심층 모범 서술 (Advanced Model Answer):</p>
+                          <div className="p-4 bg-indigo-950/50 border border-indigo-800/80 rounded-2xl space-y-1.5">
+                            <p className="text-[11px] font-black text-indigo-300">🏆 심층 확장 모범 에세이 (Advanced Model Answer):</p>
                             <p className="text-xs sm:text-sm font-medium text-slate-200 leading-relaxed italic">
                               "{feedback.advanced_model_en}"
                             </p>
                           </div>
+
+                          {/* 🏛️ 3-STAGE FOLLOW-UP INQUIRY (Socratic, Feynman, SCAMPER) */}
+                          {feedback.socratic_followups && feedback.socratic_followups.length > 0 && (
+                            <div className="space-y-4 pt-3 border-t border-purple-800/50">
+                              <div className="flex items-center justify-between">
+                                <h5 className="text-xs font-black text-white flex items-center gap-1.5">
+                                  <span>🏛️</span> 소크라테스 3단계 꼬리물기 탐구 질문 (사고 확장)
+                                </h5>
+                                <span className="text-[10px] text-purple-300 font-bold">생각을 더 깊게 밀어붙여 보세요</span>
+                              </div>
+
+                              <div className="space-y-4">
+                                {feedback.socratic_followups.map((fStep, sIdx) => {
+                                  const stepKey = `${idx}_${sIdx}`;
+                                  return (
+                                    <div key={sIdx} className="p-4 bg-slate-950/90 border border-purple-900/60 rounded-2xl space-y-2.5">
+                                      <div className="flex items-center justify-between">
+                                        <span className="text-xs font-black text-purple-300">
+                                          {fStep.title}
+                                        </span>
+                                      </div>
+
+                                      <p className="text-xs sm:text-sm font-bold text-white">
+                                        "{fStep.question_en}"
+                                      </p>
+                                      <p className="text-xs text-slate-400">
+                                        👉 {fStep.question_ko}
+                                      </p>
+                                      <p className="text-[11px] text-indigo-400 font-medium">
+                                        💭 탐구 힌트: {fStep.prompt_ko}
+                                      </p>
+
+                                      {/* Student Follow-up Answer */}
+                                      <textarea
+                                        rows={2}
+                                        placeholder="이 후속 질문에 대한 생각을 적어보세요..."
+                                        value={followUpAnswers[stepKey] || ''}
+                                        onChange={e => setFollowUpAnswers(prev => ({ ...prev, [stepKey]: e.target.value }))}
+                                        className="w-full bg-slate-900 border border-slate-700 focus:border-indigo-500 rounded-xl p-3 text-xs text-white outline-none"
+                                      />
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
@@ -1052,7 +1154,7 @@ Please analyze and provide feedback in JSON format ONLY:
             </div>
 
             <p className="text-xs text-slate-400 leading-relaxed">
-              Google AI Studio에서 무료로 발급받은 <strong>Gemini API Key</strong>를 입력하시면, 실시간 AI 첨삭 및 IB 평가 기능을 무제한으로 사용할 수 있습니다.
+              Google AI Studio에서 무료로 발급받은 <strong>Gemini API Key</strong>를 입력하시면, 실시간 AI 소크라테스 산파 코칭 기능을 무제한으로 사용할 수 있습니다.
             </p>
 
             <div className="space-y-2">
@@ -1103,7 +1205,7 @@ Please analyze and provide feedback in JSON format ONLY:
             </div>
             <h3 className="text-2xl font-black text-white">과제가 성공적으로 제출되었습니다!</h3>
             <p className="text-xs text-slate-400">
-              선생님 LMS 대시보드에 학습 기록 및 작성하신 IB 탐구 답변이 실시간으로 등록되었습니다.
+              선생님 LMS 대시보드에 학습 기록 및 소크라테스 탐구 문답이 실시간으로 등록되었습니다.
             </p>
 
             <button

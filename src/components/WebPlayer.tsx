@@ -341,40 +341,74 @@ Please analyze and generate response in STRICT JSON format:
 }
 `;
 
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: {
-              response_mime_type: 'application/json',
-              temperature: 0.7
-            }
-          })
-        }
-      );
+      // Candidate models in strict prioritized order requested by user
+      const CANDIDATE_MODELS = [
+        'gemini-3.7-flash',
+        'gemini-3.6-flash',
+        'gemini-3.5-flash',
+        'gemini-2.5-flash',
+        'gemini-2.0-flash',
+        'gemini-2.0-flash-exp',
+        'gemini-1.5-flash-latest',
+        'gemini-1.5-flash',
+        'gemini-1.5-pro'
+      ];
 
-      if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        throw new Error(errData.error?.message || `HTTP ${response.status} 오류`);
+      let lastErrorMsg = '';
+      let successfulData: any = null;
+
+      for (const modelName of CANDIDATE_MODELS) {
+        try {
+          const response = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${geminiApiKey}`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                contents: [{ parts: [{ text: prompt }] }],
+                generationConfig: {
+                  response_mime_type: 'application/json',
+                  temperature: 0.7
+                }
+              })
+            }
+          );
+
+          if (response.ok) {
+            successfulData = await response.json();
+            console.log(`[GeminiAI] Successfully generated with model: ${modelName}`);
+            break;
+          } else {
+            const errData = await response.json().catch(() => ({}));
+            lastErrorMsg = errData.error?.message || `HTTP ${response.status}`;
+            console.warn(`[GeminiAI] Model ${modelName} unavailable, trying next fallback...`, lastErrorMsg);
+          }
+        } catch (e: any) {
+          lastErrorMsg = e.message || String(e);
+          console.warn(`[GeminiAI] Fetch failed for ${modelName}:`, e);
+        }
       }
 
-      const data = await response.json();
-      const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+      if (!successfulData) {
+        throw new Error(`모든 Gemini 모델 호출 실패: ${lastErrorMsg}`);
+      }
+
+      let rawText = successfulData.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+      // Clean markdown fences if present
+      rawText = rawText.replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim();
       const parsed: AIFeedbackResult = JSON.parse(rawText);
 
       setAiFeedbacks(prev => ({ ...prev, [qIdx]: parsed }));
     } catch (err: any) {
       alert('Gemini AI 분석 중 오류: ' + (err.message || err));
-      if (err.message?.includes('API_KEY')) {
+      if (err.message?.includes('API_KEY') || err.message?.includes('API key')) {
         setShowApiKeyModal(true);
       }
     } finally {
       setIsGeneratingAI(prev => ({ ...prev, [qIdx]: false }));
     }
   };
+
 
   const handleSaveApiKey = () => {
     const key = tempApiKey.trim();

@@ -10,7 +10,7 @@
 
 | 구분 | 접속 URL / 링크 | 주요 기능 및 용도 |
 | :--- | :--- | :--- |
-| **🎧 학생용 웹 플레이어** | [https://voicetype-player.vercel.app/](https://voicetype-player.vercel.app/) | 8대 멀티 학습 모드, 실시간 AI 소크라테스 산파 코칭, 과제 제출 |
+| **🎧 학생용 웹 플레이어** | [https://voicetype-player.vercel.app/](https://voicetype-player.vercel.app/) | 8대 멀티 학습 모드, 실시간 AI 소크라테스 산파 코칭, 스마트 사전, 과제 제출 |
 | **📊 교사용 실시간 LMS** | [https://voicetype-player.vercel.app/?mode=teacher](https://voicetype-player.vercel.app/?mode=teacher) | 10개 반 300명 명단 편집, 엑셀 일괄 등록, 실시간 성적표 & CSV 다운로드, IB 서술 답변 열람 |
 | **💻 GitHub 레포지토리** | [https://github.com/ib20260519-kecf/voicetype-player](https://github.com/ib20260519-kecf/voicetype-player) | React + TypeScript + Vite + TailwindCSS 오픈소스 코드베이스 |
 | **🗄️ Supabase Cloud DB** | `https://ujeiikjjjuygadhjvwop.supabase.co` | PostgreSQL 데이터베이스, RLS 보안 정책, 미디어 스토리지 |
@@ -40,8 +40,13 @@
 3. 🎧 **풀 받아쓰기 (Full Dictation)**: 실시간 문장 타이핑 & 정확도(%) 채점
 4. 🧩 **빈칸 채우기 (Cloze Test)**: 첫 글자 힌트 기반 빈칸 완성 훈련
 5. 🎙️ **섀도잉 & 발음평가 (Shadowing)**: Web Speech API 마이크 녹음 및 실시간 발음 유사도 채점
-6. 📊 **AI 슬라이드 강의 (Slide Lecture)**: 핵심 문장, 문법 팁, 한국어 해설 뷰어 (클린 데이터 정제)
-7. 🗂️ **단어장 & 퀴즈 (Flashcards)**: 필수 어휘 플래시카드 (클릭 시 한국어 뜻 뒤집기)
+6. 📊 **AI 슬라이드 강의 (Slide Lecture)**: 핵심 문장, 문법 팁, 한국어 해설 뷰어
+7. 📖 **스마트 단어장 & 영한/영영사전 (신규 대폭 강화)**:
+   - 🔊 **원어민 발음 듣기 (TTS)** 원클릭 재생
+   - 📖 **심층 사전 모달**: 품사, 발음기호(IPA), 영영 풀이, 한국어 뜻, 대표 예문, 유의어/반의어
+   - 🤖 **Gemini AI 심층 어원/뉘앙스/연어(Collocation) 분석**
+   - 🔍 **실시간 영단어 검색창**: 모르는 단어 즉시 검색
+   - 🖼️ **구글 이미지 검색 ↗ & 네이버/캠브리지 사전 원클릭 연동**
 8. 💡 **핵심 숙어/이디엄 (Idioms)**: 본문 구동사 및 관용표현 모아보기
 
 ### 📌 Phase 5: Google AI Studio Gemini API 실시간 연동
@@ -84,6 +89,7 @@ flowchart TB
         I -->|Gemini API 호출| J[🤖 Google AI Studio Gemini Flash]
         J -->|실시간 피드백| I
         I -->|과제 및 IB 에세이 제출| F
+        I -->|이미지/사전 검색| M[🖼️ Google Images & Naver & Cambridge]
     end
 
     subgraph Teacher_Client ["👩‍🏫 교사 대시보드"]
@@ -109,7 +115,20 @@ flowchart TB
 
 ---
 
-## 📊 5. 데이터베이스 구조 (Supabase Schema)
+## 📖 5. 스마트 인터랙티브 사전 시스템 상세
+
+| 기능 | 세부 설명 및 사용자 경험 |
+| :--- | :--- |
+| **🔊 원어민 TTS 발음** | Web Speech Synthesis API를 활용한 자연스러운 미국식 발음 즉시 재생 |
+| **📖 심층 사전 뷰어** | 품사(Part of Speech), 발음기호(IPA), 영영 풀이, 한국어 뜻, 대표/추가 예문, 유의어/반의어 |
+| **🤖 Gemini AI 어원 분석** | 단어의 역사적 어원 유래, 뉘앙스 차이, 함께 쓰이는 연어(Collocations) 실시간 생성 |
+| **🔍 실시간 단어 검색바** | Free Dictionary API 연동으로 본문 외의 모든 궁금한 영단어 즉시 검색 |
+| **🖼️ 구글 이미지 검색 연동** | 단어의 시각적 이미지와 실제 사진을 새 창으로 확인하여 **시각적 연상 기억** 극대화 |
+| **🌐 공인 사전 바로가기** | 네이버 영어사전 ↗ 및 캠브리지 사전 ↗ 원클릭 새창 연결 지원 |
+
+---
+
+## 📊 6. 데이터베이스 구조 (Supabase Schema)
 
 ```sql
 -- 1. 학급 정보 (10개 반)
@@ -158,15 +177,16 @@ CREATE TABLE learning_records (
 
 ---
 
-## 🏆 6. 플랫폼 핵심 특장점 및 교육적 기대효과
+## 🏆 7. 플랫폼 핵심 특장점 및 교육적 기대효과
 
 1. **비용 0원(Free Tier)의 완벽한 확장성**:
    * 서버 호스팅 비용(Vercel $0) + 데이터베이스 비용(Supabase $0) + AI API 비용(Google AI Studio $0) = **월 0원으로 수백 명 학생 동시 교육 가능**.
 2. **교사 업무 생산성 극대화**:
    * 영상/음원 파일 하나만 넣으면 Whisper AI가 자막 추출 ➔ 단어장 생성 ➔ 슬라이드 강의 제작 ➔ IB 질문 생성까지 전자동 완료.
    * 학생 명단 엑셀 일괄 복사/붙여넣기 및 성적표 CSV 원클릭 추출.
-3. **단순 암기를 뛰어넘는 비판적 사고력 함양**:
+3. **단순 암기를 뛰어넘는 비판적 사고력 & 시각적 어휘력 함양**:
    * 받아쓰기(Dictation)와 발음(Shadowing)으로 기초 영어를 다지고,
+   * 구글 이미지 검색과 스마트 사전으로 어휘를 시각적으로 기억하며,
    * 소크라테스 산파법 AI 코칭으로 깊이 있는 철학적 에세이와 비판적 사고력을 동시에 체득.
 
 ---

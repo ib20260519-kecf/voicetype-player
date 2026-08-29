@@ -11,6 +11,11 @@ interface DictionaryModalProps {
 export const DictionaryModal: React.FC<DictionaryModalProps> = ({ wordDetail, onClose }) => {
   const [aiDeepDive, setAiDeepDive] = useState<{ etymology: string; nuance: string; collocations: string[] } | null>(null);
   const [isLoadingAI, setIsLoadingAI] = useState<boolean>(false);
+  
+  // Auto-detect if word contains Korean characters
+  const isKoreanInitial = /[가-힣]/.test(wordDetail.word || '');
+  const [dictMode, setDictMode] = useState<'en' | 'ko'>(isKoreanInitial ? 'ko' : 'en');
+  const activeDictLang = dictMode;
 
   const handleRequestAI = async () => {
     setIsLoadingAI(true);
@@ -159,33 +164,152 @@ export const DictionaryModal: React.FC<DictionaryModalProps> = ({ wordDetail, on
           </div>
 
           {/* 🌐 External Dictionaries & Google Images Quick Links */}
-          <div className="pt-2 flex flex-wrap items-center justify-between gap-2 text-xs border-t border-slate-800">
-            <span className="text-slate-400 font-bold text-[11px]">외부 공인 사전 & 이미지 바로가기:</span>
+          <div className="pt-3 space-y-2.5 border-t border-slate-800">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <span className="text-slate-400 font-bold text-xs">🌐 공인 사전 & 학습 도구:</span>
+              <div className="flex bg-slate-950 p-1 rounded-xl border border-slate-800 gap-1 text-[11px] font-bold self-start sm:self-auto">
+                <button
+                  type="button"
+                  onClick={() => setDictMode('ko')}
+                  className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
+                    activeDictLang === 'ko' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  🇰🇷 한국어 사전 (6종)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDictMode('en')}
+                  className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
+                    activeDictLang === 'en' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  🇺🇸 영어 사전 (8종)
+                </button>
+              </div>
+            </div>
+
             <div className="flex flex-wrap gap-2">
-              <a
-                href={`https://www.google.com/search?tbm=isch&q=${encodeURIComponent(wordDetail.word)}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-3 py-1.5 bg-rose-950 text-rose-300 border border-rose-800 rounded-xl font-bold hover:bg-rose-900 transition-all text-[11px] flex items-center gap-1"
-              >
-                🖼️ 구글 이미지 검색 ↗
-              </a>
-              <a
-                href={`https://en.dict.naver.com/#/search?query=${encodeURIComponent(wordDetail.word)}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-3 py-1.5 bg-emerald-950 text-emerald-300 border border-emerald-800 rounded-xl font-bold hover:bg-emerald-900 transition-all text-[11px]"
-              >
-                🟢 네이버 영어사전 ↗
-              </a>
-              <a
-                href={`https://dictionary.cambridge.org/dictionary/english/${encodeURIComponent(wordDetail.word)}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-3 py-1.5 bg-blue-950 text-blue-300 border border-blue-800 rounded-xl font-bold hover:bg-blue-900 transition-all text-[11px]"
-              >
-                🔵 캠브리지 사전 ↗
-              </a>
+              {activeDictLang === 'ko' ? (
+                <>
+                  <a
+                    href={`https://ko.dict.naver.com/#/search?query=${encodeURIComponent(wordDetail.word)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-3 py-2 bg-emerald-950 text-emerald-300 border border-emerald-800 rounded-xl font-bold hover:bg-emerald-900 transition-all text-xs flex items-center gap-1"
+                  >
+                    📘 네이버 국어사전 ↗
+                  </a>
+                  <a
+                    href={`https://krdict.korean.go.kr/kor/dicMarinerSearch/search?nationCode=&ParaWordNo=&mainSearchWord=${encodeURIComponent(wordDetail.word)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-3 py-2 bg-sky-950 text-sky-300 border border-sky-800 rounded-xl font-bold hover:bg-sky-900 transition-all text-xs flex items-center gap-1"
+                  >
+                    📖 국립국어원 기초사전 ↗
+                  </a>
+                  <a
+                    href={`https://mirinae.io/#/?text=${encodeURIComponent(wordDetail.word)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() => navigator.clipboard.writeText(wordDetail.word)}
+                    className="px-3 py-2 bg-amber-950 text-amber-300 border border-amber-800 rounded-xl font-bold hover:bg-amber-900 transition-all text-xs flex items-center gap-1"
+                  >
+                    🔍 미리내 문법 (복사됨) ↗
+                  </a>
+                  <a
+                    href={`https://papago.naver.com/?sk=ko&tk=en&st=${encodeURIComponent(wordDetail.word)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-3 py-2 bg-teal-950 text-teal-300 border border-teal-800 rounded-xl font-bold hover:bg-teal-900 transition-all text-xs flex items-center gap-1"
+                  >
+                    🦜 파파고 번역 (Ko→En) ↗
+                  </a>
+                  <a
+                    href={`https://dongsa.net/?search=${encodeURIComponent(wordDetail.word)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-3 py-2 bg-indigo-950 text-indigo-300 border border-indigo-800 rounded-xl font-bold hover:bg-indigo-900 transition-all text-xs flex items-center gap-1"
+                  >
+                    🔄 Dongsa (동사 활용) ↗
+                  </a>
+                  <a
+                    href={`https://www.google.com/search?tbm=isch&q=${encodeURIComponent(wordDetail.word)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-3 py-2 bg-rose-950 text-rose-300 border border-rose-800 rounded-xl font-bold hover:bg-rose-900 transition-all text-xs flex items-center gap-1"
+                  >
+                    🖼️ 구글 이미지 검색 ↗
+                  </a>
+                </>
+              ) : (
+                <>
+                  <a
+                    href={`https://en.dict.naver.com/#/search?query=${encodeURIComponent(wordDetail.word)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-3 py-2 bg-emerald-950 text-emerald-300 border border-emerald-800 rounded-xl font-bold hover:bg-emerald-900 transition-all text-xs flex items-center gap-1"
+                  >
+                    📘 네이버 영어사전 ↗
+                  </a>
+                  <a
+                    href={`https://www.google.com/search?q=${encodeURIComponent(wordDetail.word)}+meaning`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-3 py-2 bg-blue-950 text-blue-300 border border-blue-800 rounded-xl font-bold hover:bg-blue-900 transition-all text-xs flex items-center gap-1"
+                  >
+                    🔍 구글 단어 뜻 ↗
+                  </a>
+                  <a
+                    href={`https://www.google.com/search?tbm=isch&q=${encodeURIComponent(wordDetail.word)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-3 py-2 bg-rose-950 text-rose-300 border border-rose-800 rounded-xl font-bold hover:bg-rose-900 transition-all text-xs flex items-center gap-1"
+                  >
+                    🖼️ 구글 이미지 검색 ↗
+                  </a>
+                  <a
+                    href={`https://www.youtube.com/results?search_query=how+to+pronounce+${encodeURIComponent(wordDetail.word)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-3 py-2 bg-red-950 text-red-300 border border-red-800 rounded-xl font-bold hover:bg-red-900 transition-all text-xs flex items-center gap-1"
+                  >
+                    ▶️ 유튜브 원어민 발음 ↗
+                  </a>
+                  <a
+                    href={`https://www.merriam-webster.com/dictionary/${encodeURIComponent(wordDetail.word)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-3 py-2 bg-sky-950 text-sky-300 border border-sky-800 rounded-xl font-bold hover:bg-sky-900 transition-all text-xs flex items-center gap-1"
+                  >
+                    📖 메리엄 웹스터 (Webster) ↗
+                  </a>
+                  <a
+                    href={`https://www.oxfordlearnersdictionaries.com/definition/english/${encodeURIComponent(wordDetail.word)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-3 py-2 bg-teal-950 text-teal-300 border border-teal-800 rounded-xl font-bold hover:bg-teal-900 transition-all text-xs flex items-center gap-1"
+                  >
+                    📚 옥스포드 (Oxford) ↗
+                  </a>
+                  <a
+                    href={`https://dictionary.cambridge.org/dictionary/english/${encodeURIComponent(wordDetail.word)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-3 py-2 bg-indigo-950 text-indigo-300 border border-indigo-800 rounded-xl font-bold hover:bg-indigo-900 transition-all text-xs flex items-center gap-1"
+                  >
+                    🎓 캠브리지 (Cambridge) ↗
+                  </a>
+                  <a
+                    href={`https://www.collinsdictionary.com/dictionary/english/${encodeURIComponent(wordDetail.word)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-3 py-2 bg-purple-950 text-purple-300 border border-purple-800 rounded-xl font-bold hover:bg-purple-900 transition-all text-xs flex items-center gap-1"
+                  >
+                    🌐 콜린스 코빌드 (Collins) ↗
+                  </a>
+                </>
+              )}
             </div>
           </div>
         </div>

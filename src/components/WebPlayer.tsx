@@ -258,6 +258,8 @@ export const WebPlayer: React.FC<WebPlayerProps> = ({ lesson, student, onBack })
         {currentMode === 'ib_inquiry' && (
           <IBInquiryMode
             lessonTitle={lesson.title}
+            lessonOverview={lesson.overview}
+            scriptText={segments.map(s => s.text).join(' ')}
             ibQuestions={lesson.ib_questions || []}
             ibAnswers={ibAnswers}
             setIbAnswers={setIbAnswers}

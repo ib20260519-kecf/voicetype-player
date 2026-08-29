@@ -105,6 +105,11 @@ export interface Lesson {
   idioms?: IdiomItem[];
   key_vocabulary?: DetailedWordInfo[];
   ib_questions?: IBQuestion[];
+  overview?: {
+    summary_ko?: string;
+    core_message_ko?: string;
+    key_takeaways?: string[];
+  };
   created_by?: string;
 }
 

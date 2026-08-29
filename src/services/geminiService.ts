@@ -182,6 +182,238 @@ Explain the English word "${word}" for ESL students in strict JSON format:
     };
   }
 
+  public static async generateLessonOverview(lessonTitle: string, scriptText: string): Promise<{
+    summary_ko: string;
+    core_message_ko: string;
+    key_takeaways: string[];
+    discussion_points: string[];
+  }> {
+    const apiKey = this.getStoredKey().trim();
+    if (!apiKey) {
+      return {
+        summary_ko: `본 레슨 '${lessonTitle}'은 핵심 어휘 및 문장 구조를 통해 자연스러운 대화 맥락을 익히는 교육 콘텐츠입니다.`,
+        core_message_ko: `상황에 맞는 능동적인 표현 습득과 문맥적 사고를 통해 자신감 있는 의사소통 능력을 기릅니다.`,
+        key_takeaways: [
+          `실제 원어민 대화 맥락과 자주 쓰이는 핵심 표현 이해`,
+          `청취 및 섀도잉 훈련을 통한 정확한 발음과 억양 체화`,
+          `비판적 사고 및 IB 심층 질문을 통한 자기 생각 표현하기`
+        ],
+        discussion_points: [
+          `이 상황에서 내가 주인공이라면 어떻게 대답했을까요?`,
+          `한국어식 사고방식과 영어식 표현 순서의 차이점은 무엇인가요?`
+        ]
+      };
+    }
+
+    const prompt = `
+Analyze this lesson script and generate a comprehensive overview and discussion takeaways for students in STRICT JSON format:
+{
+  "summary_ko": "전체 영상/대본의 핵심 줄거리 및 상황 맥락 요약 (친절한 한국어 2~3문장)",
+  "core_message_ko": "이 레슨이 전달하는 가장 중요한 핵심 가치 및 원리 (한국어 1~2문장)",
+  "key_takeaways": [
+    "핵심 학습 포인트 1",
+    "핵심 학습 포인트 2",
+    "핵심 학습 포인트 3"
+  ],
+  "discussion_points": [
+    "학생들이 깊이 생각해볼 만한 심층 토론 화두 1",
+    "심층 토론 화두 2"
+  ]
+}
+
+Lesson Title: "${lessonTitle}"
+Script: ${scriptText.slice(0, 3500)}
+`;
+
+    try {
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { response_mime_type: 'application/json' }
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+        return JSON.parse(raw.replace(/^```json\s*/i, '').replace(/\s*```$/i, ''));
+      }
+    } catch {}
+
+    return {
+      summary_ko: `본 영상 '${lessonTitle}'의 전체 대본을 기반으로 핵심 맥락을 파악하고 비판적 사고를 훈련합니다.`,
+      core_message_ko: `원어민식 사고 훈련과 상황별 적절한 표현을 습득합니다.`,
+      key_takeaways: [
+        `문맥 속 핵심 단어와 관용구 체화`,
+        `자연스러운 영어 어순 및 이미지 트레이닝`
+      ],
+      discussion_points: [
+        `본문에서 가장 인상 깊었던 표현이나 생각은 무엇인가요?`
+      ]
+    };
+  }
+
+  public static async generateIBQuestions(lessonTitle: string, scriptText: string): Promise<IBQuestion[]> {
+    const apiKey = this.getStoredKey().trim();
+    if (!apiKey) {
+      return [
+        {
+          type: 'factual',
+          question_en: `What was the primary situation and key message conveyed in "${lessonTitle}"?`,
+          question_ko: `본 영상에서 제시된 주요 상황과 핵심 메시지는 무엇인가요?`,
+          inquiry_prompt: `본문의 구체적 내용과 단어를 바탕으로 답변해 보세요.`
+        },
+        {
+          type: 'conceptual',
+          question_en: `How does the speaking approach or principle in this lesson improve our natural communication?`,
+          question_ko: `이 레슨에서 다룬 말하기 원리나 표현법이 우리의 자연스러운 의사소통을 어떻게 변화시키나요?`,
+          inquiry_prompt: `원리와 개념을 쉬운 예시와 함께 설명해 보세요.`
+        },
+        {
+          type: 'debatable',
+          question_en: `If you could redefine or challenge the traditional learning method shown here, what new strategy would you propose?`,
+          question_ko: `기존의 전통적인 방식이나 통념을 뒤집는다면, 당신은 어떤 새로운 전략이나 시각을 제안하시겠습니까?`,
+          inquiry_prompt: `상식을 뒤집는 창의적인 아이디어를 펼쳐보세요.`
+        }
+      ];
+    }
+
+    const prompt = `
+Generate 3 progressive IB Inquiry questions (Factual -> Conceptual -> Debatable) based on the lesson script in STRICT JSON format:
+{
+  "questions": [
+    {
+      "type": "factual",
+      "question_en": "Factual inquiry question about key details in the lesson",
+      "question_ko": "본문 내용 기반 사실 확인 질문 (친절한 한국어)",
+      "inquiry_prompt": "답변 팁 (한국어 1문장)",
+      "sample_answer_en": "Sample English answer"
+    },
+    {
+      "type": "conceptual",
+      "question_en": "Conceptual inquiry question exploring underlying principles or why it works",
+      "question_ko": "원리와 핵심 개념을 탐구하는 질문 (한국어)",
+      "inquiry_prompt": "답변 팁",
+      "sample_answer_en": "Sample English answer"
+    },
+    {
+      "type": "debatable",
+      "question_en": "Debatable thought-provoking question challenging assumptions or offering new perspectives",
+      "question_ko": "상식을 뒤집거나 다양한 관점을 비교하는 심층 토론 질문 (한국어)",
+      "inquiry_prompt": "답변 팁",
+      "sample_answer_en": "Sample English answer"
+    }
+  ]
+}
+
+Lesson Title: "${lessonTitle}"
+Script: ${scriptText.slice(0, 3500)}
+`;
+
+    try {
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { response_mime_type: 'application/json' }
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+        const parsed = JSON.parse(raw.replace(/^```json\s*/i, '').replace(/\s*```$/i, ''));
+        if (parsed.questions && parsed.questions.length > 0) return parsed.questions;
+      }
+    } catch {}
+
+    return [
+      {
+        type: 'factual',
+        question_en: `What was the primary idea in "${lessonTitle}"?`,
+        question_ko: `이 레슨의 핵심 주제는 무엇인가요?`,
+        inquiry_prompt: `본문의 주요 내용을 요약하여 작성해 보세요.`
+      },
+      {
+        type: 'conceptual',
+        question_en: `Why is this expression or concept important in real communication?`,
+        question_ko: `왜 이 표현이나 개념이 실제 소통에서 중요할까요?`,
+        inquiry_prompt: `상황에 따른 효과와 이유를 설명해 보세요.`
+      },
+      {
+        type: 'debatable',
+        question_en: `What would happen if we applied this principle to everyday life in a new way?`,
+        question_ko: `이 원리를 일상 생활에 새롭게 적용한다면 어떤 변화가 생길까요?`,
+        inquiry_prompt: `새로운 시각과 대안적 아이디어를 제안해 보세요.`
+      }
+    ];
+  }
+
+  public static async chatSocraticTikiTaka(
+    lessonTitle: string,
+    history: Array<{ sender: 'user' | 'assistant'; text: string }>,
+    userMessage: string
+  ): Promise<{ reply_ko: string; polished_en: string; followup_question_ko: string; followup_question_en: string }> {
+    const apiKey = this.getStoredKey().trim();
+    if (!apiKey) {
+      return {
+        reply_ko: `학생의 의견("${userMessage.slice(0, 30)}...")은 매우 창의적이고 주도적인 훌륭한 관점입니다! 단어 선택과 논리가 아주 훌륭합니다.`,
+        polished_en: `I believe expressing our genuine thoughts in real situations creates meaningful connections.`,
+        followup_question_ko: `그렇다면, 반대 입장의 사람들은 왜 다르게 생각할까요? 그들의 주된 이유는 무엇일까요?`,
+        followup_question_en: `What would be the strongest argument from the opposing perspective?`
+      };
+    }
+
+    const convFormatted = history.map(h => `${h.sender === 'user' ? 'Student' : 'Socratic AI'}: ${h.text}`).join('\n');
+    const prompt = `
+You are a warm, world-class Socratic IB Inquiry Coach engaging in a live "Tiki-Taka" back-and-forth dialogue with a student.
+The student is discussing the lesson: "${lessonTitle}".
+The student may write imperfect English, Korean, or mixed Konglish.
+
+Your job:
+1. Warmly validate and praise their specific idea (한국어로 학생의 핵심 생각 적극 칭찬 1~2문장).
+2. Refine their idea into a polished, natural English sentence.
+3. Keep the conversation rolling (티키타카) by asking ONE thought-provoking follow-up question (Korean & English) that challenges them to go deeper or think about another angle!
+
+Conversation history:
+${convFormatted}
+
+Latest Student Input: "${userMessage}"
+
+Respond in STRICT JSON:
+{
+  "reply_ko": "학생의 생각에 대한 따뜻한 공감 및 칭찬 피드백 (한국어 1~2문장)",
+  "polished_en": "학생의 말을 원어민 수준으로 세련되게 다듬은 영어 문장",
+  "followup_question_ko": "생각을 확장시키는 다음 티키타카 질문 (한국어 1문장)",
+  "followup_question_en": "Refined Socratic follow-up question in English"
+}
+`;
+
+    try {
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { response_mime_type: 'application/json', temperature: 0.7 }
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+        return JSON.parse(raw.replace(/^```json\s*/i, '').replace(/\s*```$/i, ''));
+      }
+    } catch {}
+
+    return {
+      reply_ko: `훌륭한 생각입니다! 이 관점은 문제의 본질을 잘 짚어냈습니다.`,
+      polished_en: `Analyzing the situation with this mindset gives us deeper clarity.`,
+      followup_question_ko: `만약 이것이 예상과 정반대의 결과를 낳는다면 어떻게 대처하시겠습니까?`,
+      followup_question_en: `How would you respond if this led to an unexpected opposite outcome?`
+    };
+  }
+
   private static generateSmartFallback(studentAnswer: string): AIFeedbackResult {
     const cleanAnswer = studentAnswer.replace(/[^a-zA-Z0-9가-힣\s]/g, '').slice(0, 30);
     return {

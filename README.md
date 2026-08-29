@@ -1,8 +1,9 @@
 # 🎓 VoiceType 하이브리드 영어 학습 & 소크라테스 IB 탐구 LMS 플랫폼 개발 보고서
 
 > **프로젝트 공식 명칭:** VoiceType Hybrid Web Platform (AI Powered IB Inquiry & Critical Thinking LMS)  
-> **최종 갱신 일자:** 2026년 8월 28일  
+> **최종 갱신 일자:** 2026년 8월 29일  
 > **아키텍처 상태:** ✅ **SOLID 5대 원칙 완벽 준수 엔터프라이즈급 클린 아키텍처**  
+> **디자인 테마:** 🌌 **2026 Modern SaaS Deep Slate Glassmorphism & Aurora Glow**  
 > **배포 상태:** ✅ 프로덕션 배포 및 실시간 가동 중 (Vercel + Supabase + Google Gemini AI)
 
 ---
@@ -11,7 +12,8 @@
 
 | 구분 | 접속 URL / 링크 | 주요 기능 및 용도 |
 | :--- | :--- | :--- |
-| **🎧 학생용 웹 플레이어** | [https://voicetype-player.vercel.app/](https://voicetype-player.vercel.app/) | 8대 멀티 학습 모드, 스마트 비주얼 스토리보드, 실시간 AI 소크라테스 산파 코칭, 스마트 사전 |
+| **🎛️ 로컬 교사용 스튜디오** | [http://127.0.0.1:8000](http://127.0.0.1:8000) | **2026 모던 다크 글래스모피즘 스튜디오 GUI**, 초고속 Whisper 자막 추출, IB 질문 자동 생성, 10개 반 선택 배포 |
+| **🎧 학생용 웹 플레이어** | [https://voicetype-player.vercel.app/](https://voicetype-player.vercel.app/) | 8대 멀티 학습 모드, **스마트 비주얼 스토리보드**, 실시간 AI 소크라테스 산파 코칭, 스마트 사전 |
 | **📊 교사용 실시간 LMS** | [https://voicetype-player.vercel.app/?mode=teacher](https://voicetype-player.vercel.app/?mode=teacher) | 10개 반 300명 명단 편집, 엑셀 일괄 등록, 실시간 성적표 & CSV 다운로드, IB 서술 답변 열람 |
 | **💻 GitHub 레포지토리** | [https://github.com/ib20260519-kecf/voicetype-player](https://github.com/ib20260519-kecf/voicetype-player) | React + TypeScript + Vite + TailwindCSS 오픈소스 코드베이스 |
 | **🗄️ Supabase Cloud DB** | `https://ujeiikjjjuygadhjvwop.supabase.co` | PostgreSQL 데이터베이스, RLS 보안 정책, 미디어 스토리지 |
@@ -40,7 +42,7 @@
 ### 📌 Phase 4: 8대 종합 멀티 학습 모드 탑재
 1. 🎬 **비디오/영상 시청 & 스마트 비주얼 스토리보드**:
    - 고화질 MP4 비디오 플레이어 지원
-   - **MP3 전용 스마트 비주얼 스토리보드 (신규)**: 영상이 없는 음원도 상황별 고화질 사진(Ken Burns 줌인) + 네온 오디오 이퀄라이저 파형으로 영화처럼 시각화!
+   - **MP3 전용 스마트 비주얼 스토리보드**: 영상이 없는 음원도 상황별 고화질 사진(Ken Burns 줌인) + 네온 오디오 이퀄라이저 파형으로 영화처럼 시각화!
 2. 🧠 **IB 심층 탐구 질문 (Inquiry & Critical Thinking)**: Factual / Conceptual / Debatable 3단계 에세이 서술관
 3. 🎧 **풀 받아쓰기 (Full Dictation)**: 실시간 문장 타이핑 & 정확도(%) 채점
 4. 🧩 **빈칸 채우기 (Cloze Test)**: 첫 글자 힌트 기반 빈칸 완성 훈련
@@ -73,6 +75,12 @@
 * **OCP (개방-폐쇄 원칙) & LSP (리스코프 치환 원칙)**: 8대 학습 모드를 독립 컴포넌트(`src/components/modes/`)로 모듈화하고 공통 인터페이스 `BaseStudyModeProps`를 준수하도록 설계하여 새로운 학습 모드를 플러그인 형태로 무한 확장 가능하게 구축.
 * **ISP (인터페이스 분리 원칙)**: `types/index.ts`에 역할별로 명확히 분리된 인터페이스 정의.
 * **DIP (의존 역전 원칙)**: UI가 구체적인 REST API 엔드포인트에 직접 결합되지 않고 추상화된 서비스 레이어를 호출하도록 구조 역전.
+
+### 📌 Phase 8: 🌌 로컬 메인 Studio GUI 2026 모던 프리미엄 전면 리디자인 (신규 완료)
+* **딥 슬레이트 글래스모피즘 (`#090D16`) & 오로라 메시 글로우** 전면 적용.
+* **사이버 스튜디오 미디어 인풋 패널 & Whisper AI 게이지 바** 탑재.
+* **넷플릭스 스타일 상단 탭 필터링 추천 채널 쇼케이스** 구축.
+* **스튜디오 타임라인 자막 편집기 & 네온 팝업 모달** 일관성 확립.
 
 ---
 
@@ -146,102 +154,35 @@ flowchart TB
 └────────────────────────────────────────────────────────────┘
 ```
 
-* **동적 상황 일러스트 전환 (Ken Burns Zoom)**: 음원의 대화 상황(공항, 호텔, 비즈니스, 학교 등)에 맞는 고품질 사진이 오디오 진행도에 따라 서서히 줌인되며 크로스페이드.
-* **글래스모피즘 포커스 자막 카드**: 어두운 오버레이 배경 위에 현재 화자의 핵심 대사가 시원한 카드로 강조되어 리스닝 몰입감 200% 상승.
-* **네온 오디오 이퀄라이저 파형**: 소리가 재생될 때 12채널 네온 파형이 살아 숨쉬듯 반응.
-* **배경 ON/OFF 토글**: 학생의 필요에 따라 언제든지 배경 이미지를 켜고 끌 수 있음.
-
 ---
 
-## 🧠 5. IB 소크라테스 AI 코칭 프레임워크 상세
+## 🎯 5. 글로벌 3대 맞춤 교육 채널 큐레이션 (ESL + KSL/TOPIK + 한국어 해설 영어)
 
-| 단계 | 철학적/학습적 기법 | 질문의 목적 및 학생 사고 유도 방향 |
-| :--- | :--- | :--- |
-| **기본 분석** | **Positive Validation** | 콩글리시나 단문이어도 학생의 아이디어를 칭찬하고, 자연스러운 원어민 표현(Polished English) 제시 |
-| **1단계** | 🏛️ **소크라테스 산파법 (Socratic Clarification)** | 학생 주장의 숨겨진 전제를 흔들고, 반대 상황(극단적 예외)을 제시하여 기준의 명확성을 스스로 깨닫게 유도 |
-| **2단계** | 🧠 **파인만 학습법 (Feynman Simplification)** | 어려운 개념을 10세 어린이에게 설명하듯 일상 속 장난감/음식/게임 비유를 들어 본질을 쉽게 설명하도록 훈련 |
-| **3단계** | ⚡ **SCAMPER 발상 전환 (Perspective Shift)** | 기존 상식이나 시장 규칙을 대체(Substitute)하거나 뒤집어(Reverse) 완전히 새로운 관점에서 미래를 상상하도록 확장 |
+본 플랫폼은 **① ESL 글로벌 영어 학습자 지원**, **② 한국 진출 외국인을 위한 TOPIK 시험/한국어 학습 지원**, **③ 한국어 화자를 위한 직관적 영어 어순/뉘앙스 습득 지원**의 3대 목적을 완벽히 수행합니다.
 
----
-
-## 📖 6. 스마트 인터랙티브 사전 시스템 상세
-
-| 기능 | 세부 설명 및 사용자 경험 |
-| :--- | :--- |
-| **🔊 원어민 TTS 발음** | Web Speech Synthesis API를 활용한 자연스러운 미국식 발음 즉시 재생 |
-| **📖 심층 사전 뷰어** | 품사(Part of Speech), 발음기호(IPA), 영영 풀이, 한국어 뜻, 대표/추가 예문, 유의어/반의어 |
-| **🤖 Gemini AI 어원 분석** | 단어의 역사적 어원 유래, 뉘앙스 차이, 함께 쓰이는 연어(Collocations) 실시간 생성 |
-| **🔍 실시간 단어 검색바** | Free Dictionary API 연동으로 본문 외의 모든 궁금한 영단어 즉시 검색 |
-| **🖼️ 구글 이미지 검색 연동** | 단어의 시각적 이미지와 실제 사진을 새 창으로 확인하여 **시각적 연상 기억** 극대화 |
-| **🌐 공인 사전 바로가기** | 네이버 영어사전 ↗ 및 캠브리지 사전 ↗ 원클릭 새창 연결 지원 |
-
----
-
-## 📊 7. 데이터베이스 구조 (Supabase Schema)
-
-```sql
--- 1. 학급 정보 (10개 반)
-CREATE TABLE classes (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  teacher_name TEXT DEFAULT 'Teacher'
-);
-
--- 2. 학생 명단 (반별 30명, 총 300명)
-CREATE TABLE students (
-  id TEXT PRIMARY KEY,
-  class_id TEXT REFERENCES classes(id) ON DELETE CASCADE,
-  student_no INT NOT NULL,
-  name TEXT NOT NULL
-);
-
--- 3. 레슨 및 학습 콘텐츠
-CREATE TABLE lessons (
-  id TEXT PRIMARY KEY,
-  title TEXT NOT NULL,
-  audio_url TEXT NOT NULL,
-  video_url TEXT,
-  segments JSONB NOT NULL,
-  slides JSONB,
-  key_vocabulary JSONB,
-  idioms JSONB,
-  ib_questions JSONB,
-  duration_sec INT DEFAULT 0
-);
-
--- 4. 학생별 실시간 학습 성적 및 IB 서술 답변
-CREATE TABLE learning_records (
-  student_id TEXT REFERENCES students(id) ON DELETE CASCADE,
-  class_id TEXT REFERENCES classes(id) ON DELETE CASCADE,
-  lesson_id TEXT REFERENCES lessons(id) ON DELETE CASCADE,
-  accuracy_score INT DEFAULT 0,
-  completed BOOLEAN DEFAULT false,
-  time_spent_sec INT DEFAULT 0,
-  wrong_words TEXT[],
-  ib_answers JSONB,
-  completed_at TIMESTAMPTZ DEFAULT now(),
-  PRIMARY KEY (student_id, lesson_id)
-);
+```text
+🎯 VoiceType Studio 추천 채널 3대 커리큘럼
+├── 1. 🇺🇸 [영어 학습 (ESL Immersion)] ── 전 세계 외국인을 위한 순수 영어 채널
+│   ├── 🐣 초급: Dr. Binocs, SciShow Kids, Oxford English, English Singsing
+│   ├── 🌿 중급: BBC Learning English, English with Lucy, Rachel's English, RealLife English
+│   ├── 🎓 고급: TED-Ed, Kurzgesagt, Vox, Crash Course, NatGeo, CNBC Make It
+│   ├── 🎙️ VOA 공식: Let's Learn English (L1/L2), Everyday Grammar, News Words
+│   └── 🎧 ESL-Lab: Easy / Intermediate / Difficult 오디오 리스닝
+│
+├── 2. 🇰🇷 [한국어 & TOPIK (KSL)] ── 외국인의 TOPIK 합격 & 한국어 습득 채널
+│   ├── 📖 전래동화/스토리: Korean Fairy Tales (명작/전래), 깨비키즈 전래동화, 핑크퐁 한국어
+│   ├── 🎯 TOPIK/EPS 시험대비: masterTOPIK (1~6급 기출/전략), seemile (EPS-TOPIK)
+│   ├── 🏛️ 공인 표준 한국어: 세종학당재단 (King Sejong), KBS WORLD TV
+│   ├── 🌟 체계적 문법/강의: Talk To Me In Korean (TTMIK), GO! Billy Korean, KoreanClass101
+│   └── 🗣️ 100% 한국어 몰입: Learn Korean in Korean (태웅쌤 CI 몰입식)
+│
+└── 3. 🏹 [한국어 해설 영어 (English for Koreans)] ── 한국인을 위한 영어 채널
+    ├── 🏹 애로우 잉글리시 (Arrow English): 이미지 직독직해 & 원어민 어순 감각
+    ├── 🧢 라이브 아카데미 (Live Academy): 한국인 맞춤 원어민 뉘앙스 & 실전 구동사
+    ├── 💎 구슬쌤 (Kuseul Ssam): 비즈니스 & 일상 실전 이디엄 총정리
+    └── 🗽 올리버쌤 (Oliver Ssam): 미국 문화 & 콩글리시 교정
 ```
 
 ---
 
-## 🏆 8. 플랫폼 핵심 특장점 및 교육적 기대효과
-
-1. **비용 0원(Free Tier)의 완벽한 확장성**:
-   * 서버 호스팅 비용(Vercel $0) + 데이터베이스 비용(Supabase $0) + AI API 비용(Google AI Studio $0) = **월 0원으로 수백 명 학생 동시 교육 가능**.
-2. **SOLID 클린 아키텍처 기반의 높은 유지보수성**:
-   * 기능별 책임이 완벽히 분리되어 있어, 코드 수정 및 신규 모드 확장이 안전하고 빠름.
-3. **교사 업무 생산성 극대화**:
-   * 영상/음원 파일 하나만 넣으면 Whisper AI가 자막 추출 ➔ 단어장 생성 ➔ 슬라이드 강의 제작 ➔ IB 질문 생성까지 전자동 완료.
-   * **10개 반 중 원하는 특정 반만 콕 집어 원클릭 타겟 배포 지원**.
-   * 학생 명단 엑셀 일괄 복사/붙여넣기 및 성적표 CSV 원클릭 추출.
-4. **MP3 음원도 생생한 비주얼 스토리보드로 시각화**:
-   * 영상이 없는 오디오 레슨도 상황별 일러스트와 네온 이퀄라이저 파형을 통해 지루함 없는 몰입형 학습 환경 제공.
-5. **단순 암기를 뛰어넘는 비판적 사고력 & 시각적 어휘력 함양**:
-   * 받아쓰기(Dictation)와 발음(Shadowing)으로 기초 영어를 다지고,
-   * 구글 이미지 검색과 스마트 사전으로 어휘를 시각적으로 기억하며,
-   * 소크라테스 산파법 AI 코칭으로 깊이 있는 철학적 에세이와 비판적 사고력을 동시에 체득.
-
----
-*본 플랫폼은 미래형 AI 교육 및 IB 프레임워크 학습을 선도하기 위해 완벽히 구축되었습니다.*
+*본 플랫폼은 미래형 AI 언어 교육 및 TOPIK / ESL 통합 학습을 선도하기 위해 완벽히 구축되었습니다.*

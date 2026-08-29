@@ -49,9 +49,31 @@ export class DictionaryService {
   };
 
   public static async searchWord(query: string): Promise<DetailedWordInfo> {
-    const term = query.trim().toLowerCase();
+    const term = query.trim();
+    if (!term) {
+      return {
+        word: '',
+        meaning_ko: '',
+        part_of_speech: '',
+        definition_en: ''
+      };
+    }
+
+    // Direct check for Korean text
+    const isKorean = /[가-힣]/.test(term);
+    if (isKorean) {
+      return {
+        word: term,
+        meaning_ko: term,
+        part_of_speech: '한국어 어휘',
+        definition_en: `한국어 단어 "${term}". 하단 공인 국어사전 및 미리내 문법을 통해 정밀 해설을 확인하세요.`,
+        example: `"${term}" 예문 및 문맥 학습`
+      };
+    }
+
+    const lowerTerm = term.toLowerCase();
     try {
-      const res = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${term}`);
+      const res = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${lowerTerm}`);
       if (res.ok) {
         const data = await res.json();
         const entry = data[0];
@@ -62,8 +84,8 @@ export class DictionaryService {
         const phonetic = entry.phonetic || entry.phonetics?.find((p: any) => p.text)?.text || '';
 
         return {
-          word: entry.word,
-          meaning_ko: `(영영) ${def.slice(0, 40)}...`,
+          word: entry.word || term,
+          meaning_ko: `(영영) ${def.slice(0, 45)}...`,
           part_of_speech: meaning?.partOfSpeech ? `${meaning.partOfSpeech}` : 'noun',
           phonetic: phonetic,
           definition_en: def,

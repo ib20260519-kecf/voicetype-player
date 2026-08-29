@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Lesson, Segment, StudentInfo, StudyMode, DetailedWordInfo } from '../types';
 import { StorageService } from '../services/storageService';
+import { DictionaryService } from '../services/dictionaryService';
 
 // Mode Components (SRP / OCP / LSP)
 import { VideoMode } from './modes/VideoMode';
@@ -149,6 +150,24 @@ export const WebPlayer: React.FC<WebPlayerProps> = ({ lesson, student, onBack })
     setShowResultModal(true);
   };
 
+  const handleLookupWord = async (word: string) => {
+    const cleanWord = word.replace(/^[.,;:!?(){}[\]"']+|[.,;:!?(){}[\]"']+$/g, '').trim();
+    if (!cleanWord) return;
+    
+    // Check if in lesson key_vocabulary
+    const inLessonVocab = lesson.key_vocabulary?.find(v => v.word.toLowerCase() === cleanWord.toLowerCase());
+    if (inLessonVocab) {
+      setSelectedWordDetail({
+        ...inLessonVocab,
+        ...(DictionaryService.defaultVocabDetails[cleanWord.toLowerCase()] || {})
+      });
+      return;
+    }
+
+    const detail = await DictionaryService.searchWord(cleanWord);
+    setSelectedWordDetail(detail);
+  };
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-between">
       {/* Background Audio Source */}
@@ -157,30 +176,34 @@ export const WebPlayer: React.FC<WebPlayerProps> = ({ lesson, student, onBack })
       {/* Header Bar */}
       <header className="bg-slate-900/90 border-b border-slate-800 p-4 sticky top-0 z-30 backdrop-blur-md space-y-3">
         <div className="max-w-5xl mx-auto flex items-center justify-between gap-3">
-          <button
-            onClick={onBack}
-            className="flex items-center gap-1.5 text-xs font-bold text-slate-400 hover:text-white px-3 py-2 bg-slate-800 rounded-xl transition-all cursor-pointer"
-          >
-            ← 목록으로
-          </button>
-
-          <div className="text-center flex-1 truncate px-2">
-            <h2 className="text-sm sm:text-base font-black text-white truncate">{lesson.title}</h2>
-            <p className="text-[11px] text-indigo-400 font-bold">{student.name} 학생 학습 중</p>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={onBack}
+              className="p-2 hover:bg-slate-800 rounded-xl text-slate-400 hover:text-white text-xs font-black transition-all cursor-pointer flex items-center gap-1"
+            >
+              ← 목록으로
+            </button>
+            <div className="hidden sm:block border-l border-slate-700 h-5"></div>
+            <div>
+              <h2 className="text-sm sm:text-base font-black text-white truncate max-w-xs sm:max-w-md">{lesson.title}</h2>
+              <span className="text-[11px] text-indigo-400 font-bold">{student.name} 학생 학습 중</span>
+            </div>
           </div>
 
           <div className="flex items-center gap-2">
             <button
               onClick={() => setShowApiKeyModal(true)}
-              className="px-3 py-2 bg-purple-950/80 hover:bg-purple-900 text-purple-300 border border-purple-800/80 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1"
-              title="Google AI Studio API Key 설정"
+              className="px-3 py-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-xl text-xs font-black flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
+              title="Google Gemini AI API 키 설정"
             >
-              🔑 {geminiApiKey ? 'Gemini 연동됨' : 'Gemini Key 등록'}
+              <span>🔑</span>
+              <span>Gemini 연동됨</span>
             </button>
+
             <button
               onClick={handleFinalSubmit}
               disabled={isSubmitting}
-              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black shadow-md cursor-pointer"
+              className="px-4 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl text-xs font-black transition-all cursor-pointer shadow-lg shadow-emerald-600/30 active:scale-95"
             >
               {isSubmitting ? '제출 중...' : '과제 제출 ✓'}
             </button>
@@ -228,6 +251,7 @@ export const WebPlayer: React.FC<WebPlayerProps> = ({ lesson, student, onBack })
             setIsPlaying={setIsPlaying}
             isPlaying={isPlaying}
             onTogglePlay={togglePlay}
+            onLookupWord={handleLookupWord}
           />
         )}
 

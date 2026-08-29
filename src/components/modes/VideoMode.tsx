@@ -4,6 +4,7 @@ import { BaseStudyModeProps } from '../../types';
 interface VideoModeProps extends BaseStudyModeProps {
   videoRef: React.RefObject<HTMLVideoElement | null>;
   setIsPlaying: (playing: boolean) => void;
+  onLookupWord?: (word: string) => void;
 }
 
 // 🎨 High-Quality Contextual Storyboard Images for Audio Lessons
@@ -23,6 +24,7 @@ export const VideoMode: React.FC<VideoModeProps> = ({
   videoRef,
   setIsPlaying,
   isPlaying = false,
+  onLookupWord
 }) => {
   const isVideoSource = (lesson.audio_url && lesson.audio_url.endsWith('.mp4')) || !!lesson.video_url;
   const activeSegment = segments[activeSegmentIndex] || { text: '', start: 0, end: 0 };
@@ -30,6 +32,7 @@ export const VideoMode: React.FC<VideoModeProps> = ({
   const [showStoryboard, setShowStoryboard] = useState<boolean>(true);
   const [currentImageIndex, setCurrentImageIndex] = useState<number>(0);
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [dictInputQuery, setDictInputQuery] = useState<string>('');
   const scrollContainerRef = React.useRef<HTMLDivElement>(null);
 
   // Rotate Storyboard image dynamically based on active segment progression
@@ -52,6 +55,36 @@ export const VideoMode: React.FC<VideoModeProps> = ({
       }
     }
   }, [activeSegmentIndex]);
+
+  const handleDirectDictSearch = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (dictInputQuery.trim() && onLookupWord) {
+      onLookupWord(dictInputQuery.trim());
+      setDictInputQuery('');
+    }
+  };
+
+  const renderInteractiveWords = (text: string) => {
+    const tokens = text.split(/(\s+)/);
+    return tokens.map((token, i) => {
+      if (/^\s+$/.test(token)) {
+        return <span key={i}>{token}</span>;
+      }
+      return (
+        <span
+          key={i}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (onLookupWord) onLookupWord(token);
+          }}
+          className="cursor-pointer hover:bg-amber-400/25 hover:text-amber-200 px-0.5 rounded transition-all underline-offset-2 hover:underline inline-block"
+          title="클릭하여 14종 단어 사전 & 발음 확인 📖"
+        >
+          {token}
+        </span>
+      );
+    });
+  };
 
   const filteredSegments = segments.filter(seg =>
     seg.text.toLowerCase().includes(searchQuery.toLowerCase())
@@ -116,7 +149,7 @@ export const VideoMode: React.FC<VideoModeProps> = ({
                       Sentence {activeSegmentIndex + 1} of {segments.length}
                     </span>
                     <h3 className="text-sm sm:text-base md:text-lg font-black text-white leading-relaxed tracking-wide drop-shadow-md">
-                      "{activeSegment.text}"
+                      {renderInteractiveWords(activeSegment.text || '')}
                     </h3>
                   </div>
                 </div>
@@ -151,32 +184,52 @@ export const VideoMode: React.FC<VideoModeProps> = ({
 
         {/* 📜 Right Column: Synchronized Interactive Subtitles / Script (5 Cols) */}
         <div className="lg:col-span-5 flex flex-col bg-slate-950/90 border border-slate-800/90 rounded-2xl p-3.5 shadow-inner">
-          {/* Header & Search */}
+          {/* Header & Subtitle Count */}
           <div className="flex items-center justify-between gap-2 border-b border-slate-800/80 pb-2.5 mb-2.5">
             <div className="flex items-center gap-2">
               <span className="text-sm">📜</span>
               <span className="text-xs font-black text-white">대본 & 자막 타임라인</span>
+              <span className="text-[10px] text-amber-400/90 font-medium">단어 클릭 시 사전 검색 📖</span>
             </div>
             <span className="text-[10px] font-mono font-bold text-indigo-400 bg-indigo-950/60 border border-indigo-800/60 px-2 py-0.5 rounded-full">
               총 {segments.length}문장
             </span>
           </div>
 
-          {/* Quick Search */}
-          <div className="mb-2">
-            <input
-              type="text"
-              placeholder="대본 검색..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full px-3 py-1.5 bg-slate-900 border border-slate-800 focus:border-indigo-500 rounded-xl text-xs text-white outline-none placeholder:text-slate-600 transition-colors"
-            />
+          {/* Quick Tools: Script Filter & Instant Word Dictionary Search */}
+          <div className="space-y-2 mb-2">
+            <div className="flex gap-1.5">
+              <input
+                type="text"
+                placeholder="대본 문장 검색..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="flex-1 px-3 py-1.5 bg-slate-900 border border-slate-800 focus:border-indigo-500 rounded-xl text-xs text-white outline-none placeholder:text-slate-600 transition-colors"
+              />
+            </div>
+
+            <form onSubmit={handleDirectDictSearch} className="flex gap-1.5">
+              <input
+                type="text"
+                placeholder="궁금한 단어 사전 바로 검색..."
+                value={dictInputQuery}
+                onChange={(e) => setDictInputQuery(e.target.value)}
+                className="flex-1 px-3 py-1.5 bg-slate-900/90 border border-amber-500/30 focus:border-amber-400 rounded-xl text-xs text-amber-100 outline-none placeholder:text-slate-600"
+              />
+              <button
+                type="submit"
+                className="px-3 py-1.5 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white rounded-xl text-xs font-black transition-all cursor-pointer shadow-md shadow-amber-600/20 whitespace-nowrap flex items-center gap-1"
+              >
+                <span>🔍</span>
+                <span>사전</span>
+              </button>
+            </form>
           </div>
 
           {/* Scrollable Subtitle Sentences with Auto-Scroll & Instant Jump */}
           <div
             ref={scrollContainerRef}
-            className="flex-1 max-h-[380px] sm:max-h-[420px] overflow-y-auto space-y-1.5 custom-scrollbar pr-1"
+            className="flex-1 max-h-[360px] sm:max-h-[400px] overflow-y-auto space-y-1.5 custom-scrollbar pr-1"
           >
             {filteredSegments.length === 0 ? (
               <p className="text-center py-10 text-slate-500 text-xs">일치하는 대본이 없습니다.</p>
@@ -188,23 +241,34 @@ export const VideoMode: React.FC<VideoModeProps> = ({
                   <div
                     key={originalIdx}
                     id={`video-seg-${originalIdx}`}
-                    onClick={() => onJumpToSegment(originalIdx)}
-                    className={`p-2.5 rounded-xl text-xs cursor-pointer transition-all flex items-start justify-between gap-2 border ${
+                    className={`p-2.5 rounded-xl text-xs transition-all flex items-start justify-between gap-2 border ${
                       isCurrent
                         ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-black shadow-lg shadow-indigo-600/30 scale-101 border-indigo-400'
-                        : 'bg-slate-900/60 border-slate-800/80 text-slate-300 hover:bg-slate-800 hover:text-white hover:border-slate-700'
+                        : 'bg-slate-900/60 border-slate-800/80 text-slate-300 hover:bg-slate-800/90 hover:border-slate-700'
                     }`}
-                    title="클릭하면 해당 구간으로 비디오 이동"
                   >
-                    <span className="flex-1 leading-relaxed flex items-start gap-1.5">
-                      <span className="font-mono text-[10px] opacity-70 mt-0.5 w-5 flex-shrink-0">
+                    <div className="flex-1 leading-relaxed flex items-start gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => onJumpToSegment(originalIdx)}
+                        className="font-mono text-[10px] opacity-70 mt-0.5 w-5 flex-shrink-0 hover:text-white cursor-pointer"
+                        title="이 문장으로 비디오 이동"
+                      >
                         {originalIdx + 1}.
-                      </span>
-                      <span>{seg.text}</span>
-                    </span>
-                    <span className="font-mono text-[10px] opacity-70 px-1.5 py-0.5 rounded bg-black/40 flex-shrink-0">
+                      </button>
+                      <div className="flex-1">
+                        {renderInteractiveWords(seg.text)}
+                      </div>
+                    </div>
+                    
+                    <button
+                      type="button"
+                      onClick={() => onJumpToSegment(originalIdx)}
+                      className="font-mono text-[10px] opacity-70 px-1.5 py-0.5 rounded bg-black/40 flex-shrink-0 hover:opacity-100 hover:bg-black/60 transition-all cursor-pointer"
+                      title="이 시간으로 재생"
+                    >
                       {Math.floor(seg.start)}s
-                    </span>
+                    </button>
                   </div>
                 );
               })
